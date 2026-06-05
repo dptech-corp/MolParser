@@ -1,0 +1,4 @@
+interface:
+  display_name: "MolParser E-SMILES"
+  short_description: "Work with MolParser E-SMILES for OCSR/Markush tasks"
+  default_prompt: "Use $molparser-extended-smiles to normalize, validate, and render this E-SMILES string when code execution is available; report unsupported chemistry explicitly."
