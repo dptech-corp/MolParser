@@ -23,18 +23,24 @@ Use this skill when reading, writing, validating, normalizing, or rendering MolP
 
 ## Normalization And Substitution
 
-Use repository utilities when executable code is available:
+Use `postprocess_caption` to normalize E-SMILES, substitute known abbreviations,
+and get CXSMILES:
 
 ```python
-from utils import Translator, postprocess_caption
+from utils import postprocess_caption
 
 result = postprocess_caption(raw_esmiles)
-translated = Translator.refactor(raw_esmiles)
+
+# result["smi"]: abbreviation-substituted RDKit SMILES
+# result["esmi"]: normalized E-SMILES
+# result["cxsmiles"]: CXSMILES converted from normalized E-SMILES
+# result["markush"]: whether unresolved Markush groups remain
+# result["sru"]: whether an SRU marker was detected
+# result["groups"]: unresolved E-SMILES extension records
 ```
 
-- `postprocess_caption` is the default entry point.
-- `Translator.refactor` canonicalizes the base SMILES, repairs some atom-group indexes, substitutes known atom-indexed abbreviations from `utils/abbrevs_example.csv`, and remaps unresolved extension indexes.
-- Resolved abbreviations are folded into `smi` / `esmi`; unresolved Markush groups (`R[1]`, ring-level groups, abstract rings, unsupported labels) remain in the extension.
+- Use `result["esmi"]` for normalized E-SMILES output.
+- Use `result["cxsmiles"]` when CXSMILES output is needed.
 
 ## Rendering
 

@@ -47,13 +47,14 @@ from utils import postprocess_caption
 raw = "*c1ccccc1<sep><a>0:CF3</a>"
 result = postprocess_caption(raw)
 
-# caption: original input
-# smi: abbreviation-substituted RDKit SMILES
-# esmi: abbreviation-substituted E-SMILES
-# markush: whether unresolved Markush groups remain
-# sru: whether an SRU marker was detected
-# groups: unresolved E-SMILES extension records
-for key in ("caption", "smi", "esmi", "markush", "sru", "groups"):
+# caption: original input string
+# smi: normalized RDKit SMILES after substituting known abbreviations
+# esmi: normalized E-SMILES after substitution and index repair
+# cxsmiles: CXSMILES generated from the normalized E-SMILES
+# markush: True if unresolved Markush labels remain
+# sru: True if a structural repeating unit marker was detected
+# groups: unresolved E-SMILES extension records kept after normalization
+for key in ("caption", "smi", "esmi", "cxsmiles", "markush", "sru", "groups"):
     print(f"{key}: {result[key]}")
 ```
 
@@ -63,6 +64,7 @@ Expected output:
 caption: *c1ccccc1<sep><a>0:CF3</a>
 smi: FC(F)(F)c1ccccc1
 esmi: FC(F)(F)c1ccccc1<sep>
+cxsmiles: FC(F)(F)c1ccccc1
 markush: False
 sru: False
 groups:

@@ -11,16 +11,18 @@ except ImportError:  # Support running from package directory as working directo
 
 
 def postprocess_caption(caption: str, error_msg: bool = False) -> Dict[str, object]:
-    """Refactor a raw caption into ``smi`` / ``esmi`` / ``markush`` / ``sru`` / ``groups``."""
-    result = Translator.refactor(str(caption).strip(), error_msg=error_msg)
+    """Refactor a raw caption into normalized SMILES, E-SMILES, and CXSMILES."""
+    raw_caption = str(caption).strip()
+    result = Translator.refactor(raw_caption, error_msg=error_msg)
+    cxsmiles = Translator.esmiles_to_cxsmiles(raw_caption, error_msg=error_msg)
     if result is None:
-        raw_caption = str(caption).strip()
         raw_smi = raw_caption.split("<sep>", 1)[0]
         raw_groups = raw_caption.split("<sep>", 1)[1] if "<sep>" in raw_caption else ""
         return {
             "caption": raw_caption,
             "smi": raw_smi,
             "esmi": raw_caption if "<sep>" in raw_caption else f"{raw_smi}<sep>",
+            "cxsmiles": cxsmiles,
             "markush": "<sep>" in raw_caption and raw_groups != "",
             "sru": False,
             "groups": raw_groups,
@@ -29,6 +31,7 @@ def postprocess_caption(caption: str, error_msg: bool = False) -> Dict[str, obje
         "caption": result.caption,
         "smi": result.smi,
         "esmi": result.esmi,
+        "cxsmiles": cxsmiles,
         "markush": result.markush,
         "sru": result.sru,
         "groups": result.groups,

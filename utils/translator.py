@@ -568,6 +568,30 @@ class Translator:
                 sru=False,
             )
 
+    @classmethod
+    def esmiles_to_cxsmiles(cls, caption: str, error_msg: bool = False) -> str:
+        """Convert E-SMILES to CXSMILES using the refactored E-SMILES output."""
+        raw_caption = str(caption).strip()
+        raw_groups = ""
+        if Tokens.separator in raw_caption:
+            trailing = raw_caption.split(Tokens.separator, 1)[1]
+            raw_groups, _ = cls.parse_trailing(trailing)
+
+        translated = cls.refactor(raw_caption, error_msg=error_msg)
+        esmi = translated.esmi if translated is not None else raw_caption
+        is_sru = translated.sru if translated is not None else False
+
+        try:
+            from .cxsmiles import _convert_refactored_esmi_to_cxsmiles
+        except ImportError:  # Support running from package directory as working directory.
+            from cxsmiles import _convert_refactored_esmi_to_cxsmiles
+
+        return _convert_refactored_esmi_to_cxsmiles(
+            esmi,
+            source_groups=raw_groups,
+            sru=is_sru,
+        )
+
 
 __all__ = [
     "AtomIndex",
