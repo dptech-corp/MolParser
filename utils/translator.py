@@ -18,14 +18,14 @@ except ImportError:  # Support running from package directory as working directo
 
 # Ambiguous element symbols are omitted.
 PERIODIC_TABLE = {
-    "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
+    "H", "He", "Li", "Be", "C", "N", "O", "F", "Ne",
     "Na", "Mg", "Al", "Si", "P", "S", "Cl", "K", "Ca",
     "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn",
-    "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr", "Y", "Zr",
+    "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr", "Zr",
     "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn",
     "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Nd",
     "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb",
-    "Lu", "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg",
+    "Lu", "Hf", "Ta", "Re", "Os", "Ir", "Pt", "Au", "Hg",
     "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra", "Th",
     "Pa", "U",
 }
