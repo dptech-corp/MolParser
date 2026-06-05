@@ -50,7 +50,7 @@ def _apply_raw_atom_labels(mol: Chem.rdchem.Mol, groups: str) -> None:
             continue
         if tag == "c":
             mol.GetAtomWithIdx(atom_idx).SetProp("atomLabel", f"c{label}")
-        elif tag == "a" and label.startswith("<"):
+        elif tag == "a" and label.startswith("<") and label != "<dum>":
             mol.GetAtomWithIdx(atom_idx).SetProp("atomLabel", label)
 
 
