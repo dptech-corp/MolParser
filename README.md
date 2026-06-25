@@ -12,10 +12,14 @@ MolParser toolkit for working with **E-SMILES** (extended SMILES) in OCSR and Ma
 ## Installation
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
-Run the examples below from the **repository root** so that `from utils import ...` resolves correctly.
+After installation, use the utilities through the `molparser` package namespace:
+
+```python
+from molparser import utils as mutils
+```
 
 ## E-SMILES overview
 
@@ -43,10 +47,10 @@ Full specification: [skills/molparser-extended-smiles/extended-smiles-spec.md](s
 Convert E-SMILES to SMILES with abbreviation substitution, and convert E-SMILES to CXSMILES on a best-effort basis.
 
 ```python
-from utils import postprocess_caption
+from molparser import utils as mutils
 
 raw = "*c1ccccc1<sep><a>0:CF3</a>"
-result = postprocess_caption(raw)
+result = mutils.postprocess_caption(raw)
 
 # caption: original input string
 # smi: normalized RDKit SMILES after substituting known abbreviations
@@ -78,9 +82,9 @@ either `R1` or `R[1]`; values can be known abbreviations or SMILES fragments.
 When a fragment contains `*`, that atom is treated as the attachment point.
 
 ```python
-from utils import substitute_markush
+from molparser import utils as mutils
 
-result = substitute_markush(
+result = mutils.substitute_markush(
     "*c1ccccc1<sep><a>0:R[1]</a>",
     {"R1": "Me", "R2": "*CCO"},
 )
@@ -93,7 +97,7 @@ list. Multiplicity suffixes such as `?3`, `?1-3`, and `?n` copy the group over
 possible ring sites; `?n` reads the copy count from the definition dictionary.
 
 ```python
-result = substitute_markush(
+result = mutils.substitute_markush(
     "c1ccccc1<sep><r>0:R[1]?1-3</r>",
     {"R1": "Me"},
 )
@@ -107,9 +111,9 @@ Render the E-SMILES as SVG and save it locally:
 
 ```python
 from pathlib import Path
-from utils import draw
+from molparser import utils as mutils
 
-svg_text = draw("*C(O)c1cc(C(=O)N(*)*)cc(-c2*ccc*2)c1<sep><a>0:CF3</a><a>9:R[3]</a><a>10:R[2]</a><a>14:X</a><a>18:Y</a><r>1:R[1]?1-3</r>", output_format="svg")
+svg_text = mutils.draw("*C(O)c1cc(C(=O)N(*)*)cc(-c2*ccc*2)c1<sep><a>0:CF3</a><a>9:R[3]</a><a>10:R[2]</a><a>14:X</a><a>18:Y</a><r>1:R[1]?1-3</r>", output_format="svg")
 
 svg_path = Path("molecule.svg")
 svg_path.write_text(svg_text, encoding="utf-8")
@@ -151,7 +155,7 @@ Load these files for the agent:
 python skills/molparser-extended-smiles/validate_esmiles.py "<your_esmiles>"
 ```
 
-Then normalize and render with `postprocess_caption` and `draw`.
+Then normalize and render with `mutils.postprocess_caption` and `mutils.draw`.
 
 ## Related resources
 

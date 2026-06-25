@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=78.1.1", "wheel>=0.45.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "molparser"
+version = "0.1.0"
+description = "MolParser utilities for E-SMILES, Markush substitution, CXSMILES, and rendering."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "rdkit>=2025.9.6",
+    "pydantic>=2.12.3",
+    "cairosvg>=2.8.2",
+]
+
+[tool.setuptools.packages.find]
+include = ["molparser*", "utils*"]
+
+[tool.setuptools.package-data]
+utils = ["abbrevs_example.csv"]

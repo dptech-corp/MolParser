@@ -1,6 +1,6 @@
 ---
 name: molparser-extended-smiles
-description: "Use for MolParser E-SMILES generation, validation, normalization, substituent substitution, rendering, and repair in OCSR/Markush workflows, including atom-indexed substituents, regio-uncertain ring attachments, abstract-ring superatoms, dummy attachment points, and SRU repeat markers."
+description: "Use for MolParser E-SMILES generation, validation, normalization, abbreviation substitution, Markush definition substitution, rendering, and repair in OCSR/Markush workflows, including atom-indexed substituents, regio-uncertain ring attachments, abstract-ring superatoms, dummy attachment points, multiplicity suffixes, and SRU repeat markers."
 ---
 
 # MolParser E-SMILES Skill
@@ -23,13 +23,13 @@ Use this skill when reading, writing, validating, normalizing, or rendering MolP
 
 ## Normalization And Substitution
 
-Use `postprocess_caption` to normalize E-SMILES, substitute known abbreviations,
-and get CXSMILES:
+Use `postprocess_caption` to convert E-SMILES to SMILES with abbreviation
+substitution and get best-effort CXSMILES:
 
 ```python
-from utils import postprocess_caption
+from molparser import utils as mutils
 
-result = postprocess_caption(raw_esmiles)
+result = mutils.postprocess_caption(raw_esmiles)
 
 # result["smi"]: abbreviation-substituted RDKit SMILES
 # result["esmi"]: normalized E-SMILES
@@ -42,15 +42,44 @@ result = postprocess_caption(raw_esmiles)
 - Use `result["esmi"]` for normalized E-SMILES output.
 - Use `result["cxsmiles"]` when CXSMILES output is needed.
 
+## Markush Definition Substitution
+
+Use `substitute_markush` when unresolved Markush labels should be expanded into
+concrete SMILES. Definition keys can use `R1` or `R[1]`; values can be known
+abbreviations (`Me`, `Cl`, `Ph`) or SMILES fragments. If a fragment contains
+`*`, that atom is used as the attachment point. The return value is a single
+SMILES string when the substitution is fully determined, or a list of SMILES
+when regio-uncertain attachments or multiplicity ranges produce multiple
+deduplicated structures.
+
+```python
+from molparser import utils as mutils
+
+result = mutils.substitute_markush(
+    "*c1ccccc1<sep><a>0:R[1]</a>",
+    {"R1": "Me"},
+)
+# "Cc1ccccc1"
+```
+
+- Ring-indexed records such as `<r>0:R[1]</r>` enumerate regio-uncertain
+  attachments and return a SMILES list after canonical de-duplication:
+  `mutils.substitute_markush("c1ccccc1<sep><r>0:R[1]</r>", {"R1": "Me"})`
+  returns `"Cc1ccccc1"` after symmetry de-duplication, while
+  `<r>0:R[1]?1-3</r>` returns a list for 1-3 methyl substitutions on benzene.
+- Multiplicity suffixes `?3`, `?1-3`, and `?n` copy a group or local
+  substructure; `?n` reads the count from the definition dictionary, e.g.
+  `<a>2:CH2?n</a>` with `{"n": 10}`.
+
 ## Rendering
 
 Use rendering for visual QA, not as chemical validation:
 
 ```python
-from utils import draw
+from molparser import utils as mutils
 
-svg_text = draw(result["esmi"], output_format="svg")
-png_bytes = draw(result["esmi"], output_format="png")
+svg_text = mutils.draw(result["esmi"], output_format="svg")
+png_bytes = mutils.draw(result["esmi"], output_format="png")
 ```
 
 The drawer displays atom substituents, dummy attachment points, abstract rings, and ring-level annotations from the E-SMILES extension.
