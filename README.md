@@ -1,11 +1,11 @@
 # MolParser
 
-MolParser is a toolkit for working with **E-SMILES** (extended SMILES) in OCSR and Markush workflows. The notation follows the formulation introduced in the [MolParser paper](https://arxiv.org/abs/2411.11098).
+MolParser toolkit for working with **E-SMILES** (extended SMILES) in OCSR and Markush workflows. The notation follows the formulation introduced in the [MolParser paper](https://arxiv.org/abs/2411.11098).
 
 
 | Path                                | Role                                                                               |
 | ----------------------------------- | ---------------------------------------------------------------------------------- |
-| `utils/`                            | MolParser utils (substitute known abbreviations, and render E-SMILES to structure) |
+| `utils/`                            | MolParser utils (normalize E-SMILES, substitute abbreviations, convert to CXSMILES, and render structures) |
 | `skills/molparser-extended-smiles/` | E-SMILES skills (concise rules and examples for LLM / OCSR agents)                 |
 
 
@@ -32,6 +32,7 @@ Common extension records:
 - `<c>9:B</c>` — abstract-ring or superatom placeholder
 - `<a>0:<dum></a>` — explicit dummy attachment point
 - `|Sg:n|` — structural repeating unit (SRU) marker
+- `?n` — group-level multiplicity suffixes
 
 Full specification: `[skills/molparser-extended-smiles/extended-smiles-spec.md](skills/molparser-extended-smiles/extended-smiles-spec.md)`
 
@@ -39,7 +40,7 @@ Full specification: `[skills/molparser-extended-smiles/extended-smiles-spec.md](
 
 ### Post-process E-SMILES
 
-Normalize an E-SMILES string and substitute known abbreviations. In this example, `CF3` is read from `utils/abbrevs_example.csv`, attached to the dummy atom `*`, and folded into ordinary SMILES. No unresolved Markush group remains, so `markush` is `False`.
+Convert E-SMILES to SMILES with abbreviation substitution, and convert E-SMILES to CXSMILES on a best-effort basis.
 
 ```python
 from utils import postprocess_caption
