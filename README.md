@@ -34,7 +34,7 @@ Common extension records:
 - `|Sg:n|` — structural repeating unit (SRU) marker
 - `?n` — group-level multiplicity suffixes
 
-Full specification: `[skills/molparser-extended-smiles/extended-smiles-spec.md](skills/molparser-extended-smiles/extended-smiles-spec.md)`
+Full specification: [skills/molparser-extended-smiles/extended-smiles-spec.md](skills/molparser-extended-smiles/extended-smiles-spec.md)
 
 ## Quick start
 
