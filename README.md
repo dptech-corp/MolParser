@@ -70,6 +70,36 @@ sru: False
 groups:
 ```
 
+### Substitute Markush Definitions
+
+Substitute Markush labels with a definition dictionary. Definition keys can use
+either `R1` or `R[1]`; values can be known abbreviations or SMILES fragments.
+When a fragment contains `*`, that atom is treated as the attachment point.
+
+```python
+from utils import substitute_markush
+
+result = substitute_markush(
+    "*c1ccccc1<sep><a>0:R[1]</a>",
+    {"R1": "Me", "R2": "*CCO"},
+)
+print(result)
+# Cc1ccccc1
+```
+
+Ring-indexed Markush records expand regio-uncertain attachments into a SMILES
+list. Multiplicity suffixes such as `?3`, `?1-3`, and `?n` copy the group over
+possible ring sites; `?n` reads the copy count from the definition dictionary.
+
+```python
+result = substitute_markush(
+    "c1ccccc1<sep><r>0:R[1]?1-3</r>",
+    {"R1": "Me"},
+)
+print(result)
+# ['Cc1ccccc1', 'Cc1cccc(C)c1', ...]
+```
+
 ### Render E-SMILES
 
 Render the E-SMILES as SVG and save it locally:
@@ -128,3 +158,23 @@ Then normalize and render with `postprocess_caption` and `draw`.
 - [MolParser](https://arxiv.org/abs/2411.11098) — end-to-end molecular recognition. [Demo](https://ocsr.dp.tech/)
 - [MolDetv2 weights](https://huggingface.co/UniParser/MolDetv2) — lightweight molecule detector. [Demo](https://huggingface.co/spaces/AI4Industry/MolDet)
 
+## 📖 Citation
+
+```bibtex
+@inproceedings{fang2025molparser,
+  title={Molparser: End-to-end visual recognition of molecule structures in the wild},
+  author={Fang, Xi and Wang, Jiankun and Cai, Xiaochen and Chen, Shangqian and Yang, Shuwen and Tao, Haoyi and Wang, Nan and Yao, Lin and Zhang, Linfeng and Ke, Guolin},
+  booktitle={Proceedings of the IEEE/CVF International Conference on Computer Vision},
+  pages={24528--24538},
+  year={2025}
+}
+```
+
+```bibtex
+@article{fang2025uniparser,
+  title={Uni-Parser Technical Report},
+  author={Fang, Xi and Tao, Haoyi and Yang, Shuwen and Zhong, Suyang and Lu, Haocheng and Lyu, Han and Huang, Chaozheng and Li, Xinyu and Zhang, Linfeng and Ke, Guolin},
+  journal={arXiv preprint arXiv:2512.15098},
+  year={2025}
+}
+```
