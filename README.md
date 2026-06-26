@@ -36,7 +36,7 @@ Common extension records:
 - `<c>9:B</c>` — abstract-ring or superatom placeholder
 - `<a>0:<dum></a>` — explicit dummy attachment point
 - `|Sg:n|` — structural repeating unit (SRU) marker
-- `?n` — group-level multiplicity suffixes
+- `?n` — local substructure multiplicity suffixes
 
 Full specification: [skills/molparser-extended-smiles/extended-smiles-spec.md](skills/molparser-extended-smiles/extended-smiles-spec.md)
 
@@ -93,8 +93,9 @@ print(result)
 ```
 
 Ring-indexed Markush records expand regio-uncertain attachments into a SMILES
-list. Multiplicity suffixes such as `?3`, `?1-3`, and `?n` copy the group over
-possible ring sites; `?n` reads the copy count from the definition dictionary.
+list. Multiplicity suffixes such as `?3`, `?1-3`, and `?n` encode local
+substructure replication over possible ring sites; `?n` reads the replication
+count from the definition dictionary.
 
 ```python
 result = mutils.substitute_markush(

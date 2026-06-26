@@ -1,6 +1,6 @@
 ---
 name: molparser-extended-smiles
-description: "Use for MolParser E-SMILES generation, validation, normalization, abbreviation substitution, Markush definition substitution, rendering, and repair in OCSR/Markush workflows, including atom-indexed substituents, regio-uncertain ring attachments, abstract-ring superatoms, dummy attachment points, multiplicity suffixes, and SRU repeat markers."
+description: "Use for MolParser E-SMILES generation, validation, normalization, abbreviation substitution, Markush definition substitution, rendering, and repair in OCSR/Markush workflows, including atom-indexed substituents, regio-uncertain ring attachments, abstract-ring superatoms, dummy attachment points, local substructure multiplicity suffixes, and SRU repeat markers."
 ---
 
 # MolParser E-SMILES Skill
@@ -16,7 +16,7 @@ Use this skill when reading, writing, validating, normalizing, or rendering MolP
    - `<r>[RING_INDEX]:[GROUP_LABEL]</r>`: ring-indexed substituent with unspecified attachment atom.
    - `<c>[ATOM_INDEX]:[RING_LABEL]</c>`: abstract-ring or superatom placeholder at a dummy atom.
    - `<a>[ATOM_INDEX]:<dum></a>`: explicit dummy attachment point.
-   - `?n`, `?1-3`, `?3`: multiplicity suffix on a group label.
+   - `?n`, `?1-3`, `?3`: local substructure multiplicity suffix on a group label.
    - `|Sg:n|`: structural repeating unit (SRU) repeat marker.
 4. Keep indexes zero-based. Atom indexes and ring indexes are separate namespaces.
 5. Return the E-SMILES first; add only concise notes for unsupported chemistry or ambiguity.
@@ -67,8 +67,8 @@ result = mutils.substitute_markush(
   `mutils.substitute_markush("c1ccccc1<sep><r>0:R[1]</r>", {"R1": "Me"})`
   returns `"Cc1ccccc1"` after symmetry de-duplication, while
   `<r>0:R[1]?1-3</r>` returns a list for 1-3 methyl substitutions on benzene.
-- Multiplicity suffixes `?3`, `?1-3`, and `?n` copy a group or local
-  substructure; `?n` reads the count from the definition dictionary, e.g.
+- Multiplicity suffixes `?3`, `?1-3`, and `?n` encode local substructure
+  replication; `?n` reads the replication count from the definition dictionary, e.g.
   `<a>2:CH2?n</a>` with `{"n": 10}`.
 
 ## Rendering
@@ -89,7 +89,7 @@ The drawer displays atom substituents, dummy attachment points, abstract rings, 
 - Exactly one top-level `<sep>`.
 - `<a>` indexes atoms; `<r>` indexes rings; `<c>` indexes the dummy atom carrying the abstract-ring label.
 - `GROUP_LABEL` may be a common abbreviation (`Me`, `OMe`, `CF3`), a Markush label (`R[1]`), or `<dum>`.
-- Use group-level multiplicity suffixes (`?n`, `?1-3`, `?3`) separately from SRU-level `|Sg:n|`.
+- Use local substructure multiplicity suffixes (`?n`, `?1-3`, `?3`) separately from SRU-level `|Sg:n|`.
 - After canonicalization or abbreviation substitution, regenerate all affected extension indexes.
 
 ## Boundary Policy

@@ -9,7 +9,7 @@ This guide turns the supported figures into writing rules for MolParser E-SMILES
 3. Use `<a>` for atom-indexed substituents, abbreviations, Markush groups, and dummy attachment points.
 4. Use `<r>` only when a substituent belongs to a ring but the exact attachment atom is not specified.
 5. Use `<c>` for abstract-ring or superatom labels carried by a dummy atom.
-6. Use `?n`, `?1-3`, or `?3` for group-level multiplicity.
+6. Use `?n`, `?1-3`, or `?3` for local substructure multiplicity.
 7. Use `|Sg:n|` only for structural repeating unit (SRU) repetition.
 8. Do not invent tokens for unsupported chemistry. Preserve the encodable backbone and report what cannot be encoded.
 
@@ -59,7 +59,7 @@ N(C(=O)C(*)NC1N=C(N(*)*)N=C(N(*)*C(=O)N(*)*)N=1)*<sep><a>4:R[1]</a><a>10:R[6]</a
 
 ![Example 5](assets/images/05-ring-attachment-one-repeat-range.png)
 
-Use `<r>[RING_INDEX]:[GROUP_LABEL]</r>` when a substituent is attached somewhere on a ring and the exact atom is unspecified. Add `?1-3` for a local repeat range.
+Use `<r>[RING_INDEX]:[GROUP_LABEL]</r>` when a substituent is attached somewhere on a ring and the exact atom is unspecified. Add `?1-3` for a local substructure multiplicity range.
 
 ```text
 *C(O)c1cc(C(=O)N(*)*)cc(-c2*ccc*2)c1<sep><a>0:CF3</a><a>9:R[3]</a><a>10:R[2]</a><a>14:X</a><a>18:Y</a><r>1:R[1]?1-3</r>
@@ -85,11 +85,11 @@ Keep complex group labels inside the `<r>` payload when the ring attachment posi
 c1ccccc1<sep><r>0:L[1]R[1]</r><r>0:L[2]COR[2]</r><r>0:R[3]</r>
 ```
 
-### Example 8: Group-Level Multiplicity
+### Example 8: Local Substructure Multiplicity
 
 ![Example 8](assets/images/08-repeat-n.png)
 
-Use a suffix on the group label for local multiplicity. This is not the same as an SRU repeat.
+Use a suffix on the group label for local substructure multiplicity. This is not the same as an SRU repeat.
 
 ```text
 C1C=CC=C(*)C=1<sep><a>5:R[1]?n</a>

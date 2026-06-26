@@ -69,9 +69,9 @@ Example:
 *C(O)=O<sep><a>0:<dum></a>
 ```
 
-## 3. Repetition
+## 3. Multiplicity And Structural Repetition
 
-Use a suffix on a group label for local multiplicity:
+Use a suffix on a group label for local substructure multiplicity:
 
 ```text
 <r>1:R[1]?1-3</r>
@@ -116,6 +116,6 @@ Preserve the encodable backbone, do not invent tokens, and report unencoded chem
 - balanced `<a>`, `<r>`, and `<c>` tags;
 - non-negative indexes in the correct namespace;
 - no whitespace inside group labels;
-- local multiplicity uses `?n`, `?1-3`, or `?3`;
+- local substructure multiplicity uses `?n`, `?1-3`, or `?3`;
 - SRU repetition uses `|Sg:n|`;
 - extension indexes are regenerated after canonicalization or substitution.
