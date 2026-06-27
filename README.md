@@ -5,7 +5,7 @@ MolParser toolkit for working with **E-SMILES** (extended SMILES) in OCSR and Ma
 
 | Path                                | Role                                                                               |
 | ----------------------------------- | ---------------------------------------------------------------------------------- |
-| `utils/`                            | MolParser utils (normalize E-SMILES, substitute abbreviations, convert to CXSMILES, and render structures) |
+| `molparser/utils/`                  | MolParser utils (normalize E-SMILES, substitute abbreviations, convert to CXSMILES, and render structures) |
 | `skills/molparser-extended-smiles/` | E-SMILES skills (concise rules and examples for LLM / OCSR agents)                 |
 
 
@@ -184,3 +184,9 @@ Then normalize and render with `mutils.postprocess_caption` and `mutils.draw`.
   year={2025}
 }
 ```
+
+## License
+
+The project code is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details. Apache 2.0 permits **commercial use**, modification, and distribution, **provided that the license and copyright notices are retained**.
+
+Model weights, datasets, and third-party dependencies used with this project are subject to their respective licenses. Please review and comply with those licenses when using them.

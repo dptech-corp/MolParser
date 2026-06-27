@@ -7,6 +7,8 @@ name = "molparser"
 version = "0.1.0"
 description = "MolParser utilities for E-SMILES, Markush substitution, CXSMILES, and rendering."
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "rdkit>=2025.9.6",
@@ -15,7 +17,7 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["molparser*", "utils*"]
+include = ["molparser*"]
 
 [tool.setuptools.package-data]
-utils = ["abbrevs_example.csv"]
+"molparser.utils" = ["abbrevs_example.csv"]

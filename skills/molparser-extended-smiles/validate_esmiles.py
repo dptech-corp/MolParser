@@ -11,7 +11,7 @@ Notes:
   - This script validates notation shape and token structure, not full chemistry.
   - The base SMILES before <sep> must be parseable by RDKit.
   - It does not perform valence, aromaticity, stereochemical, or reaction-mechanism checks.
-  - Warnings are aligned with the current utils translator/drawer parsing scope.
+  - Warnings are aligned with the current molparser.utils translator/drawer parsing scope.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ def _validate_record(tag: str, body: str, messages: list[Message]) -> None:
     stripped = body.strip()
     match = INDEX_VALUE_RE.match(stripped)
     if not match and tag == "r":
-        # Advanced source-level form accepted by current utils parsing:
+        # Advanced source-level form accepted by current molparser.utils parsing:
         # <r><c>[INDEX]:[VALUE]</r>
         match = RING_VIRTUAL_C_RE.match(stripped)
         if match:
@@ -72,7 +72,7 @@ def _validate_record(tag: str, body: str, messages: list[Message]) -> None:
         add(messages, "error", f"<{tag}> value is empty")
         return
 
-    # Current utils parsing does not preserve group names containing spaces.
+    # Current molparser.utils parsing does not preserve group names containing spaces.
     if re.search(r"\s", value):
         add(messages, "error", f"<{tag}> value contains whitespace and may be dropped by parser: {value!r}")
 
@@ -93,7 +93,7 @@ def _validate_record(tag: str, body: str, messages: list[Message]) -> None:
                 add(
                     messages,
                     "warning",
-                    f"<{tag}> repeat suffix may not be parsed by current utils; use ?n / ?1-3 / ?3: {suffix!r}",
+                    f"<{tag}> repeat suffix may not be parsed by current molparser.utils; use ?n / ?1-3 / ?3: {suffix!r}",
                 )
 
 
@@ -141,7 +141,7 @@ def validate(esmiles: str, strict: bool = False) -> list[Message]:
             add(
                 messages,
                 "warning",
-                f"|Sg:{count}| is syntactically accepted here, but current utils only flags |Sg:n| as SRU",
+                f"|Sg:{count}| is syntactically accepted here, but current molparser.utils only flags |Sg:n| as SRU",
             )
 
     leftovers = extension

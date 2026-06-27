@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import sys
-from importlib import import_module
+from . import utils
 
 __version__ = "0.1.0"
-
-utils = import_module("utils")
-sys.modules[__name__ + ".utils"] = utils
 
 __all__ = ["__version__", "utils"]

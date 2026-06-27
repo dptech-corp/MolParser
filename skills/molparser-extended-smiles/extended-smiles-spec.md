@@ -95,7 +95,7 @@ Current `molparser.utils.postprocess_caption` recognizes `|Sg:n|` as the SRU mar
 
 ## 5. Utility Behavior
 
-- `molparser.utils.postprocess_caption` / `Translator.refactor` canonicalize SMILES and substitute known atom-indexed abbreviations from `utils/abbrevs_example.csv` when the attachment is chemically valid.
+- `molparser.utils.postprocess_caption` / `Translator.refactor` canonicalize SMILES and substitute known atom-indexed abbreviations from `molparser/utils/abbrevs_example.csv` when the attachment is chemically valid.
 - Resolved substituents are folded into the base `smi`; unresolved Markush or ring-level annotations remain in `groups`.
 - `draw` renders SMILES or E-SMILES to SVG/PNG for visual QA.
 
