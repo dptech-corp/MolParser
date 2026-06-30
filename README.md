@@ -103,7 +103,8 @@ result = mutils.substitute_markush(
     {"R1": "Me"},
 )
 print(result)
-# ['Cc1ccccc1', 'Cc1cccc(C)c1', ...]
+
+# ['Cc1cc(C)cc(C)c1', 'Cc1ccc(C)c(C)c1', 'Cc1ccc(C)cc1', 'Cc1cccc(C)c1', 'Cc1cccc(C)c1C', 'Cc1ccccc1', 'Cc1ccccc1C']
 ```
 
 ### Render E-SMILES
