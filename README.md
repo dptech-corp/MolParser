@@ -257,7 +257,7 @@ Then normalize and render with `mutils.postprocess_caption` and `mutils.draw`.
 - [MolParser](https://arxiv.org/abs/2411.11098) — end-to-end molecular recognition. [Demo](https://ocsr.dp.tech/)
 - [MolDetv2 weights](https://huggingface.co/UniParser/MolDetv2) — lightweight molecule detector. [Demo](https://huggingface.co/spaces/AI4Industry/MolDet)
 
-## 📖 Citation
+## Citation
 
 ```bibtex
 @inproceedings{fang2025molparser,
@@ -282,6 +282,4 @@ Then normalize and render with `mutils.postprocess_caption` and `mutils.draw`.
 
 The project code is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details. Apache 2.0 permits **commercial use**, modification, and distribution, **provided that the license and copyright notices are retained**.
 
-Model weights, datasets, and third-party dependencies used with this project are subject to their respective licenses. Please review and comply with those licenses when using them.
-
-MolDetv2 weights are provided for non-commercial use by their model card. The PyTorch MolDet path uses Ultralytics YOLO; Ultralytics code, models, training pipelines, and trained/fine-tuned models may require AGPL-3.0 compliance or an Ultralytics Enterprise license for closed-source, private, SaaS, internal business, or commercial usage. Review the [MolDetv2 model card](https://huggingface.co/UniParser/MolDetv2) and the [Ultralytics license page](https://www.ultralytics.com/license) before deployment.
+**Model weights, datasets, and third-party dependencies used with this project are subject to their respective licenses. Please review and comply with those licenses when using them.**
