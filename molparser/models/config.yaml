@@ -20,7 +20,7 @@ molparser:
   padding_px: 0
 
 pdf:
-  dpi: 300
+  dpi: 200
 
 runtime:
   device: auto
