@@ -13,10 +13,10 @@ moldet:
 
 molparser:
   hf_repo: UniParser/MolParser-Mobile
-  modelscope_repo: ""
+  modelscope_repo: UniParser/MolParser-Mobile
   model_path: ""
   max_length: 256
-  batch_size: 16
+  batch_size: 32
   padding_px: 0
 
 pdf:
