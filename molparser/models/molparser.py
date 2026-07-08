@@ -23,8 +23,8 @@ class MolParserConfig:
     moldet_pdf_model_path: str = ""
     moldet_image_modelname: str = "moldet_v2_yolo11n_640_general.pt"
     moldet_pdf_modelname: str = "moldet_v2_yolo11n_960_doc.pt"
-    molparser_hf_repo: str = "AI4Industry/MolParser-Mobile"
-    molparser_modelscope_repo: str = ""
+    molparser_hf_repo: str = "UniParser/MolParser-Mobile"
+    molparser_modelscope_repo: str = "UniParser/MolParser-Mobile"
     molparser_model_path: str = ""
     cache_dir: str = ""
     device: str = "auto"
@@ -32,9 +32,9 @@ class MolParserConfig:
     image_imgsz: int = 640
     pdf_imgsz: int = 960
     moldet_batch_size: int = 8
-    pdf_dpi: int = 300
+    pdf_dpi: int = 200
     max_length: int = 256
-    molparser_batch_size: int = 16
+    molparser_batch_size: int = 32
     expand_px: int = 2
     padding_px: int = 0
     hf_token: str | bool | None = None
