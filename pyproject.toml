@@ -14,10 +14,47 @@ dependencies = [
     "rdkit>=2025.9.6",
     "pydantic>=2.12.3",
     "cairosvg>=2.8.2",
+    "PyYAML>=6.0.0",
+]
+
+[project.optional-dependencies]
+pdf = [
+    "pypdfium2>=4.30.0",
+]
+moldet = [
+    "Pillow>=10.0.0",
+    "ultralytics>=8.3.0",
+]
+molparser = [
+    "Pillow>=10.0.0",
+    "torch",
+    "transformers",
+    "huggingface_hub",
+    "safetensors",
+    "timm",
+    "opencv-python",
+    "numpy",
+]
+modelscope = [
+    "modelscope",
+]
+inference = [
+    "Pillow>=10.0.0",
+    "torch",
+    "transformers",
+    "huggingface_hub",
+    "safetensors",
+    "timm",
+    "opencv-python",
+    "numpy",
+    "pypdfium2>=4.30.0",
+    "ultralytics>=8.3.0",
+    "modelscope",
 ]
 
 [tool.setuptools.packages.find]
 include = ["molparser*"]
 
 [tool.setuptools.package-data]
+"molparser.models" = ["config.yaml"]
 "molparser.utils" = ["abbrevs_example.csv"]

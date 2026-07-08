@@ -1,12 +1,17 @@
-
 # MolParser
 
-MolParser toolkit for working with **E-SMILES** (extended SMILES) in OCSR and Markush workflows. The notation follows the formulation introduced in the [MolParser paper](https://arxiv.org/abs/2411.11098).
+MolParser is a toolkit for **OCSR** (Optical Chemical Structure Recognition) workflows based on **E-SMILES** (Extended SMILES), a molecular string representation designed to support Markush structures and other extended chemical notations. It provides model-based parsing of molecular images and PDFs into E-SMILES / SMILES, together with utilities for E-SMILES normalization, abbreviation substitution, CXSMILES conversion, and structure rendering. The E-SMILES notation follows the formulation introduced in the [MolParser paper](https://arxiv.org/abs/2411.11098).
 
-| Path                                  | Role                                                                                                       |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `molparser/utils/`                  | MolParser utils (normalize E-SMILES, substitute abbreviations, convert to CXSMILES, and render structures) |
-| `skills/molparser-extended-smiles/` | E-SMILES skills (concise rules and examples for LLM / OCSR agents)                                         |
+
+| Component                           | Role                                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `molparser/models/`                 | OCSR pipeline for image / PDF molecule extraction and recognition                                             |
+| `molparser/utils/`                  | E-SMILES utilities for normalization, abbreviation substitution, CXSMILES conversion, and structure rendering |
+| `skills/molparser-extended-smiles/` | E-SMILES skills with concise rules and examples for LLM / OCSR agents                                         |
+| `skills/molparser-visual-ocsr/`     | OCSR skills for image / PDF molecule extraction workflows                                                     |
+
+
+
 
 ## Installation
 
@@ -14,11 +19,103 @@ MolParser toolkit for working with **E-SMILES** (extended SMILES) in OCSR and Ma
 pip install -e .
 ```
 
-After installation, use the utilities through the `molparser` package namespace:
+For image/PDF OCSR inference, install optional dependencies:
+
+```bash
+pip install -r requirements_model.txt
+```
+
+Install these model dependencies only when you need PDF rendering, MolDet YOLO
+detection, Hugging Face / ModelScope model downloads, or MolParser model
+inference. For E-SMILES post-processing and rendering utilities, `pip install -e .`
+is enough.
+
+After installation, use the package namespace:
 
 ```python
+from molparser import MolParser
 from molparser import utils as mutils
 ```
+
+
+
+## Quick start
+
+
+
+### OCSR Inference
+
+`MolParser` can parse a PIL image, local path, URL, PDF path, PDF URL, or a list
+of those inputs. Defaults live in `molparser/models/config.yaml`, and you can override
+them with a custom YAML file or keyword arguments. Hugging Face is tried first,
+then ModelScope is used as a fallback when configured.
+
+Use `rec_only=True` when images are already single molecule crops. Use
+`rec_only=False` when image detection is needed. PDF inputs are rendered first,
+then detected with the PDF MolDet model before recognition.
+
+```python
+from molparser import MolParser
+
+parser = MolParser()  # loads molparser/models/config.yaml
+
+# Single image path.
+image_results = parser.parse("mol.png", rec_only=True)
+
+# Mixed image URLs and local PNG paths.
+batch_results = parser.parse(
+    [
+        "https://example.org/molecule_001.png",
+        "./path/to/mol_002.png",
+        "./path/to/mol_003.jpeg",
+    ],
+    rec_only=False,
+)
+
+# Single PDF path.
+pdf_results = parser.parse("paper.pdf")
+
+for item in image_results + batch_results + pdf_results:
+    print(item.input_index, item.page_index, item.bbox, item.esmi)
+```
+
+All parsing APIs return `list[MolParserResult]`. Use `result.to_dict()` when a
+plain dictionary is needed:
+
+```python
+{
+    "source": "mol.png",
+    "input_index": 0,
+    "page_index": None,
+    "bbox": None,
+    "confidence": None,
+    "raw_caption": "...",
+    "caption": "...",
+    "smi": "...",
+    "esmi": "...",
+    "cxsmiles": "...",
+    "markush": False,
+    "sru": False,
+    "groups": "",
+}
+```
+
+- `source`: original path, URL, or `PIL.Image`.
+- `input_index`: index in the original input list. For a single input this is `0`.
+- `page_index`: zero-based PDF page index; `None` for image inputs.
+- `bbox`: detected molecule box `(x1, y1, x2, y2)` in the source image or rendered PDF page; `None` for `rec_only=True`.
+- `confidence`: MolDet confidence for detected crops; `None` for `rec_only=True`.
+- `raw_caption`: raw MolParser model output.
+- `caption`, `smi`, `esmi`, `cxsmiles`, `markush`, `sru`, `groups`: normalized outputs from `postprocess_caption`.
+
+Behavior by input mode:
+
+- Single image with `rec_only=True`: returns one result for the whole image, with `bbox=None`, `confidence=None`, and `page_index=None`.
+- Single image with `rec_only=False`: runs MolDet first and returns one result per detected molecule; zero detections returns an empty list.
+- Single PDF: renders pages, runs PDF MolDet, and returns one result per detected molecule. `page_index`, `bbox`, and `confidence` are populated.
+- List input: returns a flat list across all inputs. Use `input_index` to map each result back to the original list item.
+
+
 
 ## E-SMILES overview
 
@@ -42,8 +139,6 @@ Common extension records:
 - `?n` — local substructure multiplicity suffixes
 
 Full specification: [skills/molparser-extended-smiles/extended-smiles-spec.md](skills/molparser-extended-smiles/extended-smiles-spec.md)
-
-## Quick start
 
 ### Post-process E-SMILES
 
@@ -77,6 +172,8 @@ markush: False
 sru: False
 groups:
 ```
+
+
 
 ### Substitute Markush Definitions
 
@@ -114,6 +211,8 @@ print(result)
 # ['Cc1cc(C)cc(C)c1', 'Cc1ccc(C)c(C)c1', 'Cc1ccc(C)cc1', 'Cc1cccc(C)c1', 'Cc1cccc(C)c1C', 'Cc1ccccc1', 'Cc1ccccc1C']
 ```
 
+
+
 ### Render E-SMILES
 
 Render the E-SMILES as SVG and save it locally:
@@ -141,25 +240,34 @@ cairosvg.svg2png(url=str(svg_path), write_to=str(png_path))
 
 Rendered example:
 
-![Rendered E-SMILES example](skills/molparser-extended-smiles/assets/images/readme_molecule.svg)
+Rendered E-SMILES example
 
 **Updates**
 
 `draw` also supports virtual ring-closure connections encoded with `<v>...</v>` and `<r><v>...</r>`.
 
-E-SMILES: `C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>` 
+E-SMILES: `C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>`
 
-![VirtualArc rendering](skills/molparser-extended-smiles/assets/images/virtual_arc_with_r3.svg)
+VirtualArc rendering
 
 ## LLM / OCSR workflow
 
+
+
 ### Skill context
 
-Load these files for the agent:
+For image/PDF molecule extraction with MolDet and MolParser recognition, load:
+
+- `skills/molparser-visual-ocsr/SKILL.md`
+
+For E-SMILES generation, validation, normalization, Markush substitution, and
+rendering, load:
 
 - `skills/molparser-extended-smiles/SKILL.md`
 - `skills/molparser-extended-smiles/extended-smiles-spec.md`
 - `skills/molparser-extended-smiles/figure-index.md`
+
+
 
 ### Expected model output
 
@@ -169,6 +277,8 @@ Load these files for the agent:
 3. Markush status
 4. Unsupported or ambiguous chemistry
 ```
+
+
 
 ### Validate and normalize
 
@@ -183,6 +293,8 @@ Then normalize and render with `mutils.postprocess_caption` and `mutils.draw`.
 - [Uni-Parser](https://arxiv.org/abs/2512.15098) — agent-oriented scientific document parsing with the latest MolParser. [Demo](https://uniparser.dp.tech/)
 - [MolParser](https://arxiv.org/abs/2411.11098) — end-to-end molecular recognition. [Demo](https://ocsr.dp.tech/)
 - [MolDetv2 weights](https://huggingface.co/UniParser/MolDetv2) — lightweight molecule detector. [Demo](https://huggingface.co/spaces/AI4Industry/MolDet)
+
+
 
 ## 📖 Citation
 
@@ -205,8 +317,18 @@ Then normalize and render with `mutils.postprocess_caption` and `mutils.draw`.
 }
 ```
 
+
+
 ## License
 
 The project code is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details. Apache 2.0 permits **commercial use**, modification, and distribution, **provided that the license and copyright notices are retained**.
 
 Model weights, datasets, and third-party dependencies used with this project are subject to their respective licenses. Please review and comply with those licenses when using them.
+
+MolDetv2 weights are provided for non-commercial use by their model card. The
+PyTorch MolDet path uses Ultralytics YOLO; Ultralytics code, models, training
+pipelines, and trained/fine-tuned models may require AGPL-3.0 compliance or an
+Ultralytics Enterprise license for closed-source, private, SaaS, internal
+business, or commercial usage. Review the [MolDetv2 model card](https://huggingface.co/UniParser/MolDetv2)
+and the [Ultralytics license page](https://www.ultralytics.com/license) before
+deployment.
