@@ -3,6 +3,7 @@
 
 Supported extension records:
   - <a>[ATOM_INDEX]:[GROUP_NAME]</a>
+  - <d>[ATOM_INDEX]:<dum></d>
   - <r>[RING_INDEX]:[GROUP_NAME]</r>
   - <c>[ATOM_INDEX]:[RING_LABEL]</c>
   - |Sg:n| (structural repeating unit marker)
@@ -23,7 +24,7 @@ import sys
 from dataclasses import dataclass
 
 
-RECORD_RE = re.compile(r"<(?P<tag>a|r|c)>(?P<body>.*?)</(?P=tag)>", re.DOTALL)
+RECORD_RE = re.compile(r"<(?P<tag>a|d|r|c)>(?P<body>.*?)</(?P=tag)>", re.DOTALL)
 SG_RE = re.compile(r"\|Sg:(?P<count>[^|]+)\|")
 INDEX_VALUE_RE = re.compile(r"^(?P<index>\d+):(?P<value>.+)$", re.DOTALL)
 RING_VIRTUAL_C_RE = re.compile(r"^<c>(?P<index>\d+):(?P<value>.+)$", re.DOTALL)
@@ -79,6 +80,11 @@ def _validate_record(tag: str, body: str, messages: list[Message]) -> None:
     if "<sep>" in value:
         add(messages, "warning", f"<{tag}> value contains <sep>; check for accidental nesting")
 
+    if tag == "d":
+        if value != "<dum>":
+            add(messages, "error", f"<d> is reserved for dummy attachment points; expected <dum>, got: {value!r}")
+        return
+
     if tag == "a" and value == "<dum>":
         return
 
@@ -116,7 +122,7 @@ def validate(esmiles: str, strict: bool = False) -> list[Message]:
         add(messages, "error", f"base SMILES is not parseable by RDKit: {base!r}")
 
     if extension:
-        for tag in ("a", "r", "c"):
+        for tag in ("a", "d", "r", "c"):
             opens = len(re.findall(fr"<{tag}>", extension))
             if tag == "c":
                 # In <r><c>[INDEX]:[VALUE]</r>, <c> is an inline target marker

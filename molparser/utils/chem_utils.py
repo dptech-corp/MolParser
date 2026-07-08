@@ -41,10 +41,10 @@ def get_mol(smi: str) -> Chem.rdchem.Mol:
     return mol
 
 
-def split_groups(groups: str) -> Tuple[Dict[int, str], Dict[int, str]]:
-    pattern = r"<(?P<type>r|a)>(?P<content>.*?)</(?P=type)>"
+def split_groups(groups: str) -> Tuple[Dict[int, Dict[str, str]], Dict[int, str]]:
+    pattern = r"<(?P<type>r|a|d)>(?P<content>.*?)</(?P=type)>"
     matches = re.finditer(pattern, groups)
-    a_groups: Dict[int, str] = {}
+    a_groups: Dict[int, Dict[str, str]] = {}
     r_groups: Dict[int, str] = {}
 
     for m in matches:
@@ -57,14 +57,15 @@ def split_groups(groups: str) -> Tuple[Dict[int, str], Dict[int, str]]:
         if type_ == "r":
             r_groups[int(ind)] = content
         else:
-            a_groups[int(ind)] = content
+            a_groups[int(ind)] = {"content": content, "type": type_}
     return a_groups, r_groups
 
 
 def get_groups_str(a_groups: Dict[int, Dict], r_groups: Dict[int, Dict] | None = None) -> str:
     groups_str = ""
     for k, v in sorted(a_groups.items(), key=lambda x: x[0]):
-        groups_str += f"<a>{k}:{v['content']}</a>"
+        tag = v.get("type", "a")
+        groups_str += f"<{tag}>{k}:{v['content']}</{tag}>"
     if r_groups is not None:
         for k, v in sorted(r_groups.items(), key=lambda x: x[0]):
             groups_str += f"<r>{k}:{v['content']}</r>"
@@ -160,7 +161,7 @@ def remap_groups(mol: Chem.rdchem.Mol, groups: str, ring_info: tuple) -> str:
         new_ind = internal_to_output.get(internal_ind, internal_ind)
         group = old_ind2agroup.get(old_ind)
         if group is not None:
-            new_ind2agroup[new_ind] = {"content": group, "type": "a"}
+            new_ind2agroup[new_ind] = group
 
     new_ind2rgroup: Dict[int, Dict] = {}
     if old_ind2rgroup:

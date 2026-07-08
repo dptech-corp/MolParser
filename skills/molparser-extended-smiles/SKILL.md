@@ -15,7 +15,7 @@ Use this skill when reading, writing, validating, normalizing, or rendering MolP
    - `<a>[ATOM_INDEX]:[GROUP_LABEL]</a>`: atom-indexed substituent or abbreviation.
    - `<r>[RING_INDEX]:[GROUP_LABEL]</r>`: ring-indexed substituent with unspecified attachment atom.
    - `<c>[ATOM_INDEX]:[RING_LABEL]</c>`: abstract-ring or superatom placeholder at a dummy atom.
-   - `<a>[ATOM_INDEX]:<dum></a>`: explicit dummy attachment point.
+   - `<d>[ATOM_INDEX]:<dum></d>`: explicit dummy attachment point. This is the new SMILES 2.0 form; legacy `<a>[ATOM_INDEX]:<dum></a>` is still accepted.
    - `?n`, `?1-3`, `?3`: local substructure multiplicity suffix on a group label.
    - `|Sg:n|`: structural repeating unit (SRU) repeat marker.
 4. Keep indexes zero-based. Atom indexes and ring indexes are separate namespaces.
@@ -87,8 +87,8 @@ The drawer displays atom substituents, dummy attachment points, abstract rings, 
 ## Validation Priorities
 
 - Exactly one top-level `<sep>`.
-- `<a>` indexes atoms; `<r>` indexes rings; `<c>` indexes the dummy atom carrying the abstract-ring label.
-- `GROUP_LABEL` may be a common abbreviation (`Me`, `OMe`, `CF3`), a Markush label (`R[1]`), or `<dum>`.
+- `<a>` indexes atoms; `<d>` indexes explicit dummy attachment points; `<r>` indexes rings; `<c>` indexes the dummy atom carrying the abstract-ring label.
+- `GROUP_LABEL` may be a common abbreviation (`Me`, `OMe`, `CF3`) or a Markush label (`R[1]`). For dummy attachment points, prefer `<d>[ATOM_INDEX]:<dum></d>` and accept legacy `<a>[ATOM_INDEX]:<dum></a>`.
 - Use local substructure multiplicity suffixes (`?n`, `?1-3`, `?3`) separately from SRU-level `|Sg:n|`.
 - After canonicalization or abbreviation substitution, regenerate all affected extension indexes.
 

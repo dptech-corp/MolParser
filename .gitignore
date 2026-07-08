@@ -11,3 +11,6 @@ __pycache__/
 *.svg
 *.png
 !skills/**/assets/**/*.png
+
+output/
+TODO

@@ -221,9 +221,9 @@ class _DrawingPatterns:
         + rf"(?P<{TextType.MULTIPLE.value}>(\?([a-z]|\d{{1}}|\d-\d)$)?)"
     )
     grp_pattern = re.compile(
-        rf"({Tokens.atom_start}|{Tokens.circ_start}|{Tokens.ring_start}|{Tokens.ring_start}{Tokens.circ_start})"
+        rf"({Tokens.atom_start}|{Tokens.circ_start}|{Tokens.dummy_start}|{Tokens.ring_start}|{Tokens.ring_start}{Tokens.circ_start})"
         + r"(\d+:\S*?)"
-        + rf"({Tokens.atom_end}|{Tokens.circ_end}|{Tokens.ring_end})"
+        + rf"({Tokens.atom_end}|{Tokens.circ_end}|{Tokens.dummy_end}|{Tokens.ring_end})"
     )
     trail_pattern = Patterns.trail_pattern
 
@@ -305,9 +305,9 @@ class _DrawingTranslator:
             if parsed is None:
                 continue
             idx, grp_text = parsed
-            if grp_start == Tokens.atom_start:
+            if grp_start in (Tokens.atom_start, Tokens.dummy_start):
                 grp_desc = GroupDesc(id=AtomIndex(idx))
-                if len(grp_text) == 0:
+                if len(grp_text) == 0 or grp_start == Tokens.dummy_start:
                     grp_desc.is_dummy = True
             elif grp_start == Tokens.circ_start:
                 grp_desc = GroupDesc(id=AtomIndex(idx), is_circle=True)

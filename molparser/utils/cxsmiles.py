@@ -13,7 +13,7 @@ except ImportError:  # Support running from package directory as working directo
     from translator import AtomIndex, Translator
 
 
-_RAW_GROUP_PATTERN = re.compile(r"<(?P<tag>a|c|r)>(?P<idx>\d+):(?P<label>.+?)</(?P=tag)>")
+_RAW_GROUP_PATTERN = re.compile(r"<(?P<tag>a|c|d|r)>(?P<idx>\d+):(?P<label>.+?)</(?P=tag)>")
 
 
 def _raw_groups(groups: str) -> list[tuple[str, int, str]]:

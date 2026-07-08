@@ -6,12 +6,13 @@ This guide turns the supported figures into writing rules for MolParser E-SMILES
 
 1. Always output `SMILES<sep>EXTENSION`. If there is no extension, output `SMILES<sep>`.
 2. Use zero-based indexes from the chosen base SMILES.
-3. Use `<a>` for atom-indexed substituents, abbreviations, Markush groups, and dummy attachment points.
-4. Use `<r>` only when a substituent belongs to a ring but the exact attachment atom is not specified.
-5. Use `<c>` for abstract-ring or superatom labels carried by a dummy atom.
-6. Use `?n`, `?1-3`, or `?3` for local substructure multiplicity.
-7. Use `|Sg:n|` only for structural repeating unit (SRU) repetition.
-8. Do not invent tokens for unsupported chemistry. Preserve the encodable backbone and report what cannot be encoded.
+3. Use `<a>` for atom-indexed substituents, abbreviations, and Markush groups.
+4. Use `<d>` for explicit dummy attachment points. The legacy `<a>[ATOM_INDEX]:<dum></a>` form is still accepted for backward compatibility.
+5. Use `<r>` only when a substituent belongs to a ring but the exact attachment atom is not specified.
+6. Use `<c>` for abstract-ring or superatom labels carried by a dummy atom.
+7. Use `?n`, `?1-3`, or `?3` for local substructure multiplicity.
+8. Use `|Sg:n|` only for structural repeating unit (SRU) repetition.
+9. Do not invent tokens for unsupported chemistry. Preserve the encodable backbone and report what cannot be encoded.
 
 ## Supported Examples
 
@@ -39,10 +40,10 @@ Use `<a>[ATOM_INDEX]:[GROUP_LABEL]</a>` when a substituent is anchored to a know
 
 ![Example 3](assets/images/03-connection-point.png)
 
-Use `<a>[ATOM_INDEX]:<dum></a>` to preserve an explicit attachment point.
+Use `<d>[ATOM_INDEX]:<dum></d>` to preserve an explicit attachment point.
 
 ```text
-*C(O)=O<sep><a>0:<dum></a>
+*C(O)=O<sep><d>0:<dum></d>
 ```
 
 ### Example 4: Dataset-Specific Markush Label

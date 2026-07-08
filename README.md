@@ -34,7 +34,7 @@ Common extension records:
 - `<a>0:R[1]</a>` — atom-indexed substituent or Markush placeholder
 - `<r>0:R[1]</r>` — ring-indexed substituent (regio-uncertain attachment)
 - `<c>9:B</c>` — abstract-ring or superatom placeholder
-- `<a>0:<dum></a>` — explicit dummy attachment point
+- `<d>0:<dum></d>` — explicit dummy attachment point (new SMILES 2.0 form; legacy `<a>0:<dum></a>` is still accepted)
 - `|Sg:n|` — structural repeating unit (SRU) marker
 - `?n` — local substructure multiplicity suffixes
 

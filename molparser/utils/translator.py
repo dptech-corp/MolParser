@@ -95,6 +95,8 @@ class Tokens:
     atom_end = "</a>"
     circ_start = "<c>"
     circ_end = "</c>"
+    dummy_start = "<d>"
+    dummy_end = "</d>"
     ring_start = "<r>"
     ring_end = "</r>"
     dummy = "<dum>"
@@ -114,9 +116,9 @@ class Patterns:
         + rf"(?P<{TextType.MULTIPLE.value}>(\?([a-z]|\d+|\d-\d)$)?)"
     )
     grp_pattern = re.compile(
-        rf"({Tokens.atom_start}|{Tokens.circ_start}|{Tokens.ring_start}|{Tokens.ring_start}{Tokens.circ_start})"
+        rf"({Tokens.atom_start}|{Tokens.circ_start}|{Tokens.dummy_start}|{Tokens.ring_start}|{Tokens.ring_start}{Tokens.circ_start})"
         + r"(\d+:\S+?)"
-        + rf"({Tokens.atom_end}|{Tokens.circ_end}|{Tokens.ring_end})"
+        + rf"({Tokens.atom_end}|{Tokens.circ_end}|{Tokens.dummy_end}|{Tokens.ring_end})"
     )
     trail_pattern = re.compile(
         r"(?P<groups>([^|]*)?)(?P<extension>(\|\S+\|)?$)"
@@ -181,10 +183,14 @@ class Translator:
     def remove_atom_groups(cls, groups: str, atom_indices: set[int]) -> str:
         if not atom_indices:
             return groups
-        atom_group_pattern = re.compile(rf"{Tokens.atom_start}(\d+):.+?{Tokens.atom_end}")
+        atom_group_pattern = re.compile(
+            rf"(?P<start>{Tokens.atom_start}|{Tokens.dummy_start})"
+            r"(?P<idx>\d+):.+?"
+            rf"(?P<end>{Tokens.atom_end}|{Tokens.dummy_end})"
+        )
 
         def replace(match: re.Match) -> str:
-            return "" if int(match.group(1)) in atom_indices else match.group(0)
+            return "" if int(match.group("idx")) in atom_indices else match.group(0)
 
         return atom_group_pattern.sub(replace, groups)
 
@@ -238,9 +244,9 @@ class Translator:
             if parsed is None:
                 continue
             idx, grp_text = parsed
-            if grp_start == Tokens.atom_start:
+            if grp_start in (Tokens.atom_start, Tokens.dummy_start):
                 grp_desc = GroupDesc(id=AtomIndex(idx))
-                if len(grp_text) == 0:
+                if len(grp_text) == 0 or grp_start == Tokens.dummy_start:
                     grp_desc.is_dummy = True
             elif grp_start == Tokens.circ_start:
                 grp_desc = GroupDesc(id=AtomIndex(idx), is_circle=True)
@@ -301,23 +307,29 @@ class Translator:
     ) -> str:
         """Repair atom-group tags that miss their dummy atom."""
         star_indices = [atom.GetIdx() for atom in mol.GetAtoms() if atom.GetSymbol() == "*"]
-        if not star_indices or Tokens.atom_start not in trailing:
+        if not star_indices or (
+            Tokens.atom_start not in trailing and Tokens.dummy_start not in trailing
+        ):
             return trailing
 
-        atom_group_pattern = re.compile(rf"{Tokens.atom_start}(\d+):(.+?){Tokens.atom_end}")
+        atom_group_pattern = re.compile(
+            rf"(?P<start>{Tokens.atom_start}|{Tokens.dummy_start})"
+            r"(?P<idx>\d+):(?P<content>.+?)"
+            rf"(?P<end>{Tokens.atom_end}|{Tokens.dummy_end})"
+        )
         matches = list(atom_group_pattern.finditer(trailing))
         if not matches:
             return trailing
 
         exact_targets = {
-            int(match.group(1))
+            int(match.group("idx"))
             for match in matches
-            if int(match.group(1)) in star_indices
+            if int(match.group("idx")) in star_indices
         }
         used_targets: set[int] = set()
 
         def replace(match: re.Match) -> str:
-            raw_idx, content = match.group(1), match.group(2)
+            raw_idx, content = match.group("idx"), match.group("content")
             idx = int(raw_idx)
             if idx in star_indices and idx not in used_targets:
                 used_targets.add(idx)
@@ -341,7 +353,7 @@ class Translator:
                     nearest,
                     content,
                 )
-            return f"{Tokens.atom_start}{nearest}:{content}{Tokens.atom_end}"
+            return f"{match.group('start')}{nearest}:{content}{match.group('end')}"
 
         return atom_group_pattern.sub(replace, trailing)
 

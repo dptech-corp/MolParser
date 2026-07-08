@@ -23,7 +23,7 @@ For ordinary molecules, use `SMILES<sep>`.
 ```
 
 - `ATOM_INDEX`: zero-based atom index in the base SMILES.
-- `GROUP_LABEL`: substituent, abbreviation, Markush placeholder, or `<dum>`.
+- `GROUP_LABEL`: substituent, abbreviation, or Markush placeholder. Legacy inputs may also use `<dum>` here for dummy attachment points.
 
 Example:
 
@@ -63,10 +63,10 @@ Example:
 
 ### Dummy Attachment Point
 
-`<dum>` marks an explicit dummy atom attachment point.
+`<d>[ATOM_INDEX]:<dum></d>` marks an explicit dummy atom attachment point. This is the new SMILES 2.0 representation. The legacy `<a>[ATOM_INDEX]:<dum></a>` form remains valid for backward compatibility.
 
 ```text
-*C(O)=O<sep><a>0:<dum></a>
+*C(O)=O<sep><d>0:<dum></d>
 ```
 
 ## 3. Multiplicity And Structural Repetition
@@ -82,7 +82,7 @@ Use a suffix on a group label for local substructure multiplicity:
 Use `|Sg:n|` for structural repeating unit (SRU) repetition:
 
 ```text
-*CC*<sep><a>0:<dum></a><a>2:<dum></a>|Sg:n|
+*CC*<sep><d>0:<dum></d><d>2:<dum></d>|Sg:n|
 ```
 
 Current `molparser.utils.postprocess_caption` recognizes `|Sg:n|` as the SRU marker.
@@ -113,7 +113,7 @@ Preserve the encodable backbone, do not invent tokens, and report unencoded chem
 ## 7. Validation Checklist
 
 - exactly one top-level `<sep>`;
-- balanced `<a>`, `<r>`, and `<c>` tags;
+- balanced `<a>`, `<d>`, `<r>`, and `<c>` tags;
 - non-negative indexes in the correct namespace;
 - no whitespace inside group labels;
 - local substructure multiplicity uses `?n`, `?1-3`, or `?3`;
