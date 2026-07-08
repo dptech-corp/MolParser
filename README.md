@@ -2,8 +2,8 @@
 
 MolParser is a toolkit for **OCSR** (Optical Chemical Structure Recognition) workflows based on **E-SMILES** (Extended SMILES), a molecular string representation designed to support Markush structures and other extended chemical notations. It provides model-based parsing of molecular images and PDFs into E-SMILES / SMILES, together with utilities for E-SMILES normalization, abbreviation substitution, CXSMILES conversion, and structure rendering. The E-SMILES notation follows the formulation introduced in the [MolParser paper](https://arxiv.org/abs/2411.11098).
 
-| Component                           | Role                                                                                                          |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Component                             | Role                                                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `molparser/models/`                 | OCSR pipeline for image / PDF molecule extraction and recognition                                             |
 | `molparser/utils/`                  | E-SMILES utilities for normalization, abbreviation substitution, CXSMILES conversion, and structure rendering |
 | `skills/molparser-extended-smiles/` | E-SMILES skills with concise rules and examples for LLM / OCSR agents                                         |
