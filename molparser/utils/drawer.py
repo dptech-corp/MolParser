@@ -136,6 +136,146 @@ def _format_symbol_with_subscripts(symbol: str) -> str:
     return re.sub(r"(\d+)", r"<sub>\1</sub>", symbol)
 
 
+def _format_group_label(desc: GroupDesc) -> str:
+    if desc.symbol == Tokens.special_id and desc.script:
+        return desc.script
+    label = desc.symbol or ""
+    if desc.script is not None:
+        label += f"<sub>{desc.script}</sub>"
+    if desc.prime is not None:
+        label += desc.prime
+    if desc.multiple is not None:
+        label = "(" + label + ")" + f"<sub>{desc.multiple}</sub>"
+    return label
+
+
+def _truncate_annotation(text: str, limit: int = 64) -> str:
+    compact = re.sub(r"\s+", " ", text).strip()
+    return compact if len(compact) <= limit else compact[: limit - 3] + "..."
+
+
+def _precompat_annotations(groups: str) -> List[str]:
+    annotations: List[str] = []
+    for tag, label in (("s", "substructure"), ("g", "s-group")):
+        for match in re.finditer(rf"<{tag}>(.*?)</{tag}>", groups, re.DOTALL):
+            annotations.append(f"{label}: {_truncate_annotation(match.group(1))}")
+    return annotations
+
+
+def _virtual_arcs(groups: str) -> List[Tuple[int, str, int, int]]:
+    arcs: List[Tuple[int, str, int, int]] = []
+    pattern = r"<v>(?P<idx>\d+):(?P<name>[^:]+):\[(?P<start>\d+):(?P<end>\d+)\]</v>"
+    for match in re.finditer(pattern, groups, re.DOTALL):
+        arcs.append(
+            (
+                int(match.group("idx")),
+                match.group("name"),
+                int(match.group("start")),
+                int(match.group("end")),
+            )
+        )
+    return arcs
+
+
+def _virtual_arc_substituents(groups: str) -> Dict[int, List[str]]:
+    substituents: Dict[int, List[str]] = {}
+    pattern = r"<r><v>(?P<idx>\d+):(?P<label>.+?)</r>"
+    for match in re.finditer(pattern, groups, re.DOTALL):
+        idx = int(match.group("idx"))
+        label = match.group("label")
+        label_match = re.match(
+            r"(?P<symbol>[^\[\?\'\"]+)"
+            r"(?P<script>\[[^\]]+\])?"
+            r"(?P<prime>[\'\"]?)"
+            r"(?P<multiple>\?(?:[a-z]|\d+|\d+-\d+)?)?$",
+            label,
+        )
+        if label_match:
+            symbol = label_match.group("symbol") or ""
+            script = label_match.group("script")
+            prime = label_match.group("prime") or ""
+            multiple = label_match.group("multiple") or ""
+            if script:
+                symbol += f"<sub>{script[1:-1]}</sub>"
+            label = symbol + prime
+            if multiple:
+                label = f"({label})<sub>{multiple[1:]}</sub>"
+        substituents.setdefault(idx, []).append(label)
+    return substituents
+
+
+def _path_centroid(
+    mol: Mol,
+    conf,
+    start_idx: int,
+    end_idx: int,
+) -> Tuple[float, float]:
+    try:
+        path = Chem.rdmolops.GetShortestPath(mol, start_idx, end_idx)
+    except Exception:
+        path = (start_idx, end_idx)
+    if not path:
+        path = (start_idx, end_idx)
+    x = sum(conf.GetAtomPosition(idx).x for idx in path) / len(path)
+    y = sum(conf.GetAtomPosition(idx).y for idx in path) / len(path)
+    return x, y
+
+
+def _virtual_arc_control_point(
+    mol: Mol,
+    conf,
+    start_idx: int,
+    end_idx: int,
+    curvature: float = 0.55,
+) -> Tuple[float, float]:
+    start_pos = conf.GetAtomPosition(start_idx)
+    end_pos = conf.GetAtomPosition(end_idx)
+    mid_x = (start_pos.x + end_pos.x) / 2.0
+    mid_y = (start_pos.y + end_pos.y) / 2.0
+    dx = end_pos.x - start_pos.x
+    dy = end_pos.y - start_pos.y
+    length = math.hypot(dx, dy)
+    if length <= 1e-6:
+        return mid_x, mid_y
+
+    perp_x = -dy / length
+    perp_y = dx / length
+    centroid_x, centroid_y = _path_centroid(mol, conf, start_idx, end_idx)
+    away_x = mid_x - centroid_x
+    away_y = mid_y - centroid_y
+    if away_x * perp_x + away_y * perp_y < 0:
+        perp_x = -perp_x
+        perp_y = -perp_y
+    return mid_x + perp_x * length * curvature, mid_y + perp_y * length * curvature
+
+
+def _quadratic_bezier_point(
+    start: Point2D,
+    control: Point2D,
+    end: Point2D,
+    t: float,
+) -> Point2D:
+    one_minus_t = 1.0 - t
+    x = one_minus_t * one_minus_t * start.x + 2 * one_minus_t * t * control.x + t * t * end.x
+    y = one_minus_t * one_minus_t * start.y + 2 * one_minus_t * t * control.y + t * t * end.y
+    return Point2D(x, y)
+
+
+def _draw_quadratic_arc(
+    drawer,
+    start: Point2D,
+    control: Point2D,
+    end: Point2D,
+    segments: int = 18,
+) -> None:
+    prev = start
+    for step in range(1, segments + 1):
+        t = step / segments
+        current = _quadratic_bezier_point(start, control, end, t)
+        drawer.DrawLine(prev, current)
+        prev = current
+
+
 def _serialize_svg(root: ET.Element) -> str:
     ET.register_namespace("", _SVG_NAMESPACE)
     svg_text = ET.tostring(root, encoding="unicode")
@@ -183,6 +323,8 @@ def _expand_svg_viewbox(svg_text: str, bounds: List[float], pad: float) -> str:
     new_w = new_max_x - new_min_x
     new_h = new_max_y - new_min_y
     root.set("viewBox", f"{new_min_x} {new_min_y} {new_w} {new_h}")
+    root.set("width", f"{new_w}px")
+    root.set("height", f"{new_h}px")
     root.set("overflow", "visible")
 
     for child in root.iter():
@@ -218,10 +360,10 @@ class _DrawingPatterns:
         rf"(?P<{TextType.SYMBOL.value}>[^\[\?\'\"]*?)"
         + rf"(?P<{TextType.SCRIPT.value}>(\[\S+\])?)"
         + rf"(?P<{TextType.PRIME.value}>[\'\"]?)"
-        + rf"(?P<{TextType.MULTIPLE.value}>(\?([a-z]|\d{{1}}|\d-\d)$)?)"
+        + rf"(?P<{TextType.MULTIPLE.value}>(\?([a-z]|\d+|\d+-\d+)$)?)"
     )
     grp_pattern = re.compile(
-        rf"({Tokens.atom_start}|{Tokens.circ_start}|{Tokens.dummy_start}|{Tokens.ring_start}|{Tokens.ring_start}{Tokens.circ_start})"
+        rf"({Tokens.atom_start}|{Tokens.circ_start}|{Tokens.dummy_start}|{Tokens.ring_start}|{Tokens.ring_start}{Tokens.circ_start}|{Tokens.ring_start}{Tokens.virtual_start})"
         + r"(\d+:\S*?)"
         + rf"({Tokens.atom_end}|{Tokens.circ_end}|{Tokens.dummy_end}|{Tokens.ring_end})"
     )
@@ -264,13 +406,11 @@ class _DrawingTranslator:
     def parse_caption(
         cls, caption: str, return_mol: bool = False, error_msg: bool = False
     ) -> Optional[Tuple[Union[Mol, str], str, str]]:
-        smi, *trailings = caption.split(Tokens.separator)
-        if len(trailings) != 1:
+        if Tokens.separator not in caption:
             if error_msg:
-                logger.warning(
-                    f"{len(trailings)} `{Tokens.separator}` found in caption: {caption}"
-                )
+                logger.warning("No `%s` found in caption: %s", Tokens.separator, caption)
             return
+        smi, trailing = caption.split(Tokens.separator, 1)
 
         if error_msg:
             RDLogger.EnableLog("rdApp.*")
@@ -282,7 +422,7 @@ class _DrawingTranslator:
             return
 
         cls._preserve_stereochemistry(smi, mol)
-        groups, ext = cls.parse_trailing(trailings[0])
+        groups, ext = cls.parse_trailing(trailing)
         if return_mol:
             return mol, groups, ext
         return smi, groups, ext
@@ -293,12 +433,20 @@ class _DrawingTranslator:
         if matched is None:
             return "", ""
         content = matched.groupdict()
-        return content.get("groups", ""), content.get("extension", "")
+        return content.get("groups") or "", content.get("extension") or ""
 
     @classmethod
     def parse_groups(cls, seq: str) -> List[GroupDesc]:
         if seq == "":
             return []
+        seq = re.sub(
+            rf"{Tokens.substruct_start}.*?{Tokens.substruct_end}|"
+            rf"{Tokens.sgroup_start}.*?{Tokens.sgroup_end}|"
+            rf"{Tokens.virtual_start}.*?{Tokens.virtual_end}",
+            "",
+            seq,
+            flags=re.DOTALL,
+        )
         descriptions: List[GroupDesc] = []
         for grp_start, grp_content, _ in re.findall(_DrawingPatterns.grp_pattern, seq):
             parsed = cls.parse_group(grp_content)
@@ -311,7 +459,10 @@ class _DrawingTranslator:
                     grp_desc.is_dummy = True
             elif grp_start == Tokens.circ_start:
                 grp_desc = GroupDesc(id=AtomIndex(idx), is_circle=True)
-            elif grp_start == f"{Tokens.ring_start}{Tokens.circ_start}":
+            elif grp_start in (
+                f"{Tokens.ring_start}{Tokens.circ_start}",
+                f"{Tokens.ring_start}{Tokens.virtual_start}",
+            ):
                 grp_desc = GroupDesc(id=RingIndex(idx, virtual=True))
             elif grp_start == Tokens.ring_start:
                 grp_desc = GroupDesc(id=RingIndex(idx))
@@ -362,10 +513,10 @@ class _DrawingTranslator:
         else:
             symbol_part = content
 
-        multiple_match = re.search(r"\?([a-z]|\d{1}|\d-\d)$", symbol_part)
+        multiple_match = re.search(r"\?([a-z]|\d+|\d+-\d+)$", symbol_part)
         if multiple_match:
             texts[TextType.MULTIPLE] = multiple_match.group(1)
-            symbol_part = re.sub(r"\?([a-z]|\d{1}|\d-\d)$", "", symbol_part)
+            symbol_part = re.sub(r"\?([a-z]|\d+|\d+-\d+)$", "", symbol_part)
 
         prime_match = re.search(r"[\'\"]$", symbol_part)
         if prime_match:
@@ -413,6 +564,7 @@ class _DrawingTranslator:
 
         ring_captions: List[str] = []
         ring_annotations: List[Tuple[int, str]] = []
+        virtual_ring_annotations: List[Tuple[int, str]] = []
         for desc in grp_descriptions:
             i = int(desc.id)
             label = None
@@ -432,15 +584,11 @@ class _DrawingTranslator:
                             else f"c{desc.symbol}"
                         )
                     else:
-                        label = desc.symbol
-                        if desc.script is not None:
-                            label += f"<sub>{desc.script}</sub>"
-                        if desc.prime is not None:
-                            label += desc.prime
-                        if desc.multiple is not None:
-                            label = "(" + label + ")" + f"<sub>{desc.multiple}</sub>"
+                        label = _format_group_label(desc)
                 elif atom.GetSymbol() in ("C", "O"):
-                    if desc.symbol is None and desc.multiple is not None:
+                    if desc.symbol == Tokens.special_id:
+                        label = _format_group_label(desc)
+                    elif desc.symbol is None and desc.multiple is not None:
                         label = f"({atom.GetSymbol()})<sub>{desc.multiple}</sub>"
                 if label is not None:
                     atom.SetProp("_displayLabel", label)
@@ -469,7 +617,10 @@ class _DrawingTranslator:
                             ring_label_text += "<sub>" + desc.script + "</sub>"
                         if desc.prime:
                             ring_label_text += desc.prime
-                    ring_annotations.append((i, ring_label_text))
+                    if desc.id.virtual:
+                        virtual_ring_annotations.append((i, ring_label_text))
+                    else:
+                        ring_annotations.append((i, ring_label_text))
 
         mol.RemoveAllConformers()
         params = Chem.rdCoordGen.CoordGenParams()
@@ -567,6 +718,8 @@ class _DrawingTranslator:
             legend=" | ".join(ring_captions),
         )
 
+        ring_bounds: Optional[List[float]] = None
+
         if drawing_config.features.dummy_atoms and dummy_info and drawer_type == "SVG":
             conf = mol.GetConformer()
             for dummy_idx, connected_idx in dummy_info:
@@ -621,7 +774,62 @@ class _DrawingTranslator:
                                 e,
                             )
 
-        ring_bounds: Optional[List[float]] = None
+        if (
+            drawing_config.features.ring_annotations
+            and virtual_ring_annotations
+            and drawer_type == "SVG"
+        ):
+            conf = mol.GetConformer()
+            by_atom: Dict[int, List[str]] = {}
+            for atom_idx, label_text in virtual_ring_annotations:
+                by_atom.setdefault(atom_idx, []).append(label_text)
+
+            for atom_idx, labels in by_atom.items():
+                if not 0 <= atom_idx < mol.GetNumAtoms():
+                    continue
+                try:
+                    atom_pos = conf.GetAtomPosition(atom_idx)
+                    # Spread labels around the abstract ring placeholder.
+                    start_angle = -math.pi / 2
+                    if len(labels) > 1:
+                        start_angle -= (len(labels) - 1) * math.pi / 8
+                    for label_idx, label_text in enumerate(labels):
+                        angle = start_angle + label_idx * math.pi / 4
+                        dir_x = math.cos(angle)
+                        dir_y = math.sin(angle)
+                        line_start = Point2D(
+                            atom_pos.x + dir_x * 0.45,
+                            atom_pos.y + dir_y * 0.45,
+                        )
+                        line_end = Point2D(
+                            atom_pos.x + dir_x * 0.9,
+                            atom_pos.y + dir_y * 0.9,
+                        )
+                        label_pt = Point2D(
+                            atom_pos.x + dir_x * 1.15,
+                            atom_pos.y + dir_y * 1.15,
+                        )
+                        drawer.SetColour((0, 0, 0))
+                        drawer.SetLineWidth(1)
+                        drawer.DrawLine(line_start, line_end)
+                        drawer.DrawString(label_text, label_pt, 1)
+
+                        for pt in (line_start, line_end, label_pt):
+                            draw_pt = drawer.GetDrawCoords(pt)
+                            ring_bounds = _update_bounds(ring_bounds, draw_pt.x, draw_pt.y)
+                        draw_label = drawer.GetDrawCoords(label_pt)
+                        min_x, min_y, max_x, max_y = _estimate_text_bounds(
+                            label_text,
+                            draw_label.x,
+                            draw_label.y,
+                            font_px=float(drawing_config.visual.fixedFontSize),
+                            margin=4.0,
+                        )
+                        ring_bounds = _update_bounds(ring_bounds, min_x, min_y)
+                        ring_bounds = _update_bounds(ring_bounds, max_x, max_y)
+                except Exception as e:
+                    logger.debug("Failed to draw virtual ring annotations at atom %s: %s", atom_idx, e)
+
         if (
             drawing_config.features.ring_annotations
             and ring_annotations
@@ -632,7 +840,10 @@ class _DrawingTranslator:
             atom_rings = ring_info.AtomRings()
             bond_rings = ring_info.BondRings()
             drawer.SetLineWidth(1)
+            ring_annotations_by_idx: Dict[int, List[str]] = {}
             for ring_idx, label_text in ring_annotations:
+                ring_annotations_by_idx.setdefault(ring_idx, []).append(label_text)
+            for ring_idx, label_texts in ring_annotations_by_idx.items():
                 if not (0 <= ring_idx < len(atom_rings)):
                     continue
                 ring_atoms = atom_rings[ring_idx]
@@ -682,56 +893,179 @@ class _DrawingTranslator:
                 extension = drawing_config.styling.ring_connector_extension
                 total_length = midpoint_distance + extension
 
-                drawer.SetColour((0, 0, 0))
-                if drawing_config.styling.ring_connector_style == "solid":
-                    drawer.DrawLine(
-                        Point2D(center_x, center_y),
-                        Point2D(
-                            center_x + direction_x * total_length,
-                            center_y + direction_y * total_length,
-                        ),
-                    )
-                else:
-                    dash_length = 0.15
-                    gap_length = 0.1
-                    offset = 0.0
-                    while offset < total_length:
-                        end_offset = min(offset + dash_length, total_length)
-                        if end_offset > offset:
-                            drawer.DrawLine(
-                                Point2D(
-                                    center_x + direction_x * offset,
-                                    center_y + direction_y * offset,
-                                ),
-                                Point2D(
-                                    center_x + direction_x * end_offset,
-                                    center_y + direction_y * end_offset,
-                                ),
-                            )
-                        offset = end_offset + gap_length
-
+                base_angle = math.atan2(direction_y, direction_x)
+                spread = math.radians(26)
                 label_offset = 0.25
-                label_pt = Point2D(
-                    center_x + direction_x * (total_length + label_offset),
-                    center_y + direction_y * (total_length + label_offset),
-                )
-                drawer.SetColour((0, 0, 0))
-                drawer.DrawString(label_text, label_pt, 1)
+                for label_idx, label_text in enumerate(label_texts):
+                    angle_offset = (label_idx - (len(label_texts) - 1) / 2.0) * spread
+                    angle = base_angle + angle_offset
+                    label_dir_x = math.cos(angle)
+                    label_dir_y = math.sin(angle)
 
-                draw_center = drawer.GetDrawCoords(Point2D(center_x, center_y))
-                draw_label = drawer.GetDrawCoords(label_pt)
-                ring_bounds = _update_bounds(ring_bounds, draw_center.x, draw_center.y)
-                ring_bounds = _update_bounds(ring_bounds, draw_label.x, draw_label.y)
-                mol_end = Point2D(
-                    center_x + direction_x * total_length,
-                    center_y + direction_y * total_length,
-                )
-                draw_end = drawer.GetDrawCoords(mol_end)
-                ring_bounds = _update_bounds(ring_bounds, draw_end.x, draw_end.y)
+                    drawer.SetColour((0, 0, 0))
+                    if drawing_config.styling.ring_connector_style == "solid":
+                        drawer.DrawLine(
+                            Point2D(center_x, center_y),
+                            Point2D(
+                                center_x + label_dir_x * total_length,
+                                center_y + label_dir_y * total_length,
+                            ),
+                        )
+                    else:
+                        dash_length = 0.15
+                        gap_length = 0.1
+                        offset = 0.0
+                        while offset < total_length:
+                            end_offset = min(offset + dash_length, total_length)
+                            if end_offset > offset:
+                                drawer.DrawLine(
+                                    Point2D(
+                                        center_x + label_dir_x * offset,
+                                        center_y + label_dir_y * offset,
+                                    ),
+                                    Point2D(
+                                        center_x + label_dir_x * end_offset,
+                                        center_y + label_dir_y * end_offset,
+                                    ),
+                                )
+                            offset = end_offset + gap_length
 
-                font_px = float(drawing_config.visual.fixedFontSize)
+                    label_pt = Point2D(
+                        center_x + label_dir_x * (total_length + label_offset),
+                        center_y + label_dir_y * (total_length + label_offset),
+                    )
+                    drawer.SetColour((0, 0, 0))
+                    drawer.DrawString(label_text, label_pt, 1)
+
+                    draw_center = drawer.GetDrawCoords(Point2D(center_x, center_y))
+                    draw_label = drawer.GetDrawCoords(label_pt)
+                    ring_bounds = _update_bounds(ring_bounds, draw_center.x, draw_center.y)
+                    ring_bounds = _update_bounds(ring_bounds, draw_label.x, draw_label.y)
+                    mol_end = Point2D(
+                        center_x + label_dir_x * total_length,
+                        center_y + label_dir_y * total_length,
+                    )
+                    draw_end = drawer.GetDrawCoords(mol_end)
+                    ring_bounds = _update_bounds(ring_bounds, draw_end.x, draw_end.y)
+
+                    font_px = float(drawing_config.visual.fixedFontSize)
+                    min_x, min_y, max_x, max_y = _estimate_text_bounds(
+                        label_text,
+                        draw_label.x,
+                        draw_label.y,
+                        font_px=font_px,
+                        margin=4.0,
+                    )
+                    ring_bounds = _update_bounds(ring_bounds, min_x, min_y)
+                    ring_bounds = _update_bounds(ring_bounds, max_x, max_y)
+
+        virtual_arcs = _virtual_arcs(groups)
+        if virtual_arcs:
+            conf = mol.GetConformer()
+            arc_substituents = _virtual_arc_substituents(groups)
+            drawer.SetLineWidth(1)
+            drawer.SetColour((0.1, 0.1, 0.1))
+            for arc_idx, arc_name, start_idx, end_idx in virtual_arcs:
+                if not (0 <= start_idx < mol.GetNumAtoms() and 0 <= end_idx < mol.GetNumAtoms()):
+                    continue
+                try:
+                    start_pos = conf.GetAtomPosition(start_idx)
+                    end_pos = conf.GetAtomPosition(end_idx)
+                    start_pt = Point2D(start_pos.x, start_pos.y)
+                    end_pt = Point2D(end_pos.x, end_pos.y)
+                    ctrl_x, ctrl_y = _virtual_arc_control_point(
+                        mol,
+                        conf,
+                        start_idx,
+                        end_idx,
+                    )
+                    ctrl_pt = Point2D(ctrl_x, ctrl_y)
+                    _draw_quadratic_arc(drawer, start_pt, ctrl_pt, end_pt)
+
+                    mid_x = (start_pos.x + end_pos.x) / 2.0
+                    mid_y = (start_pos.y + end_pos.y) / 2.0
+                    label_x = ctrl_x * 0.12 + mid_x * 0.88
+                    label_y = ctrl_y * 0.12 + mid_y * 0.88
+                    label_text = arc_name
+                    label_pt = Point2D(label_x, label_y)
+                    drawer.DrawString(label_text, label_pt, 1)
+
+                    for pt in (start_pt, ctrl_pt, end_pt, label_pt):
+                        draw_pt = drawer.GetDrawCoords(pt)
+                        ring_bounds = _update_bounds(ring_bounds, draw_pt.x, draw_pt.y)
+                    draw_label = drawer.GetDrawCoords(label_pt)
+                    min_x, min_y, max_x, max_y = _estimate_text_bounds(
+                        label_text,
+                        draw_label.x,
+                        draw_label.y,
+                        font_px=float(drawing_config.visual.fixedFontSize),
+                        margin=4.0,
+                    )
+                    ring_bounds = _update_bounds(ring_bounds, min_x, min_y)
+                    ring_bounds = _update_bounds(ring_bounds, max_x, max_y)
+
+                    outward_x = ctrl_x - mid_x
+                    outward_y = ctrl_y - mid_y
+                    outward_len = math.hypot(outward_x, outward_y)
+                    if outward_len <= 1e-6:
+                        outward_x, outward_y = 0.0, -1.0
+                        outward_len = 1.0
+                    outward_x /= outward_len
+                    outward_y /= outward_len
+
+                    for sub_idx, sub_label in enumerate(arc_substituents.get(arc_idx, [])):
+                        lateral = (sub_idx - (len(arc_substituents.get(arc_idx, [])) - 1) / 2.0) * 0.35
+                        lateral_x = -outward_y * lateral
+                        lateral_y = outward_x * lateral
+                        conn_start = Point2D(
+                            label_x + lateral_x * 0.25,
+                            label_y + lateral_y * 0.25,
+                        )
+                        conn_end = Point2D(
+                            ctrl_x + outward_x * 0.65 + lateral_x,
+                            ctrl_y + outward_y * 0.65 + lateral_y,
+                        )
+                        sub_label_pt = Point2D(
+                            ctrl_x + outward_x * 0.9 + lateral_x,
+                            ctrl_y + outward_y * 0.9 + lateral_y,
+                        )
+                        drawer.DrawLine(conn_start, conn_end)
+                        drawer.DrawString(sub_label, sub_label_pt, 1)
+                        for pt in (conn_start, conn_end, sub_label_pt):
+                            draw_pt = drawer.GetDrawCoords(pt)
+                            ring_bounds = _update_bounds(ring_bounds, draw_pt.x, draw_pt.y)
+                        draw_label = drawer.GetDrawCoords(sub_label_pt)
+                        min_x, min_y, max_x, max_y = _estimate_text_bounds(
+                            sub_label,
+                            draw_label.x,
+                            draw_label.y,
+                            font_px=float(drawing_config.visual.fixedFontSize),
+                            margin=4.0,
+                        )
+                        ring_bounds = _update_bounds(ring_bounds, min_x, min_y)
+                        ring_bounds = _update_bounds(ring_bounds, max_x, max_y)
+                except Exception as e:
+                    logger.debug("Failed to draw virtualArc %s: %s", arc_idx, e)
+
+        precompat_notes = _precompat_annotations(groups)
+        if precompat_notes:
+            conf = mol.GetConformer()
+            xs = [conf.GetAtomPosition(i).x for i in range(mol.GetNumAtoms())]
+            ys = [conf.GetAtomPosition(i).y for i in range(mol.GetNumAtoms())]
+            note_x = min(xs) if xs else 0.0
+            note_y = (max(ys) if ys else 0.0) + 0.8
+            drawer.SetColour((0.1, 0.1, 0.1))
+            for idx, note in enumerate(precompat_notes):
+                note_pt = Point2D(note_x, note_y + idx * 0.45)
+                drawer.DrawString(note, note_pt, 1)
+                draw_note = drawer.GetDrawCoords(note_pt)
+                ring_bounds = _update_bounds(ring_bounds, draw_note.x, draw_note.y)
                 min_x, min_y, max_x, max_y = _estimate_text_bounds(
-                    label_text, draw_label.x, draw_label.y, font_px=font_px, margin=4.0
+                    note,
+                    draw_note.x,
+                    draw_note.y,
+                    font_px=float(drawing_config.visual.fixedFontSize),
+                    margin=4.0,
                 )
                 ring_bounds = _update_bounds(ring_bounds, min_x, min_y)
                 ring_bounds = _update_bounds(ring_bounds, max_x, max_y)

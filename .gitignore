@@ -12,5 +12,5 @@ __pycache__/
 *.png
 !skills/**/assets/**/*.png
 
-output/
+output*/
 TODO

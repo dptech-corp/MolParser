@@ -1,13 +1,12 @@
+
 # MolParser
 
 MolParser toolkit for working with **E-SMILES** (extended SMILES) in OCSR and Markush workflows. The notation follows the formulation introduced in the [MolParser paper](https://arxiv.org/abs/2411.11098).
 
-
-| Path                                | Role                                                                               |
-| ----------------------------------- | ---------------------------------------------------------------------------------- |
+| Path                                  | Role                                                                                                       |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `molparser/utils/`                  | MolParser utils (normalize E-SMILES, substitute abbreviations, convert to CXSMILES, and render structures) |
-| `skills/molparser-extended-smiles/` | E-SMILES skills (concise rules and examples for LLM / OCSR agents)                 |
-
+| `skills/molparser-extended-smiles/` | E-SMILES skills (concise rules and examples for LLM / OCSR agents)                                         |
 
 ## Installation
 
@@ -32,9 +31,13 @@ SMILES<sep>EXTENSION
 Common extension records:
 
 - `<a>0:R[1]</a>` — atom-indexed substituent or Markush placeholder
+- `<a>12:<id>[DNA]</a>` — atom-indexed special Markush label with a custom note
 - `<r>0:R[1]</r>` — ring-indexed substituent (regio-uncertain attachment)
 - `<c>9:B</c>` — abstract-ring or superatom placeholder
 - `<d>0:<dum></d>` — explicit dummy attachment point (new SMILES 2.0 form; legacy `<a>0:<dum></a>` is still accepted)
+- `<s>...</s>` — nested substructure record for ring-external repeat fragments
+- `<g>[3:2]:|Sg:n|</g>` — s-group repeat record with one or more inner/outer port pairs
+- `<v>0:A:[0:2]</v>` — virtualArc record; `<r><v>0:R[3]</r>` annotates substituents on that virtualArc
 - `|Sg:n|` — structural repeating unit (SRU) marker
 - `?n` — local substructure multiplicity suffixes
 
@@ -97,6 +100,10 @@ list. Multiplicity suffixes such as `?3`, `?1-3`, and `?n` encode local
 substructure replication over possible ring sites; `?n` reads the replication
 count from the definition dictionary.
 
+Nested `<s>...</s>` substructure records are substituted recursively and
+returned as preserved E-SMILES annotations; they are not attached back into the
+main molecule and do not change the existing `?` copy behavior.
+
 ```python
 result = mutils.substitute_markush(
     "c1ccccc1<sep><r>0:R[1]?1-3</r>",
@@ -131,6 +138,18 @@ import cairosvg
 png_path = Path("molecule.png")
 cairosvg.svg2png(url=str(svg_path), write_to=str(png_path))
 ```
+
+Rendered example:
+
+![Rendered E-SMILES example](skills/molparser-extended-smiles/assets/images/readme_molecule.svg)
+
+**Updates**
+
+`draw` also supports virtual ring-closure connections encoded with `<v>...</v>` and `<r><v>...</r>`.
+
+E-SMILES: `C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>` 
+
+![VirtualArc rendering](skills/molparser-extended-smiles/assets/images/virtual_arc_with_r3.svg)
 
 ## LLM / OCSR workflow
 

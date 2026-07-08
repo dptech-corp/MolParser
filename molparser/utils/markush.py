@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from itertools import combinations
 from typing import Iterable
@@ -17,6 +18,11 @@ except ImportError:  # Support running from package directory as working directo
 
 
 DefinitionValue = int | str | Sequence[str]
+_PRECOMPAT_RECORD_PATTERN = re.compile(
+    r"<s>.*?</s>|<g>.*?</g>|<r><v>\d+:.+?</r>|<v>.*?</v>",
+    re.DOTALL,
+)
+_SUBSTRUCT_RECORD_PATTERN = re.compile(r"^<s>(?P<body>.*)</s>$", re.DOTALL)
 
 
 def _normalize_label(label: str) -> str:
@@ -112,6 +118,10 @@ def _resolve_repetition_count(
 
 def _is_carbon_chain_repeat(desc: GroupDesc) -> bool:
     return (desc.symbol == "CH2") or (desc.symbol == "CH" and desc.script == "2")
+
+
+def _is_special_id_label(desc: GroupDesc) -> bool:
+    return desc.symbol == Tokens.special_id
 
 
 def _find_atom_by_source_index(mol: Chem.rdchem.Mol, source_idx: int) -> int | None:
@@ -378,34 +388,116 @@ def _expand_ring_group(
     return next_states
 
 
-def substitute_markush(
+def _format_substitution_outputs(
+    smiles: list[str],
+    annotation_variants: list[str],
+    ext: str,
+    force_esmiles: bool,
+) -> list[str]:
+    if not force_esmiles and not annotation_variants:
+        return smiles
+
+    annotations = annotation_variants or [""]
+    return [
+        Translator.build_esmi(smile, annotation, ext)
+        for smile in smiles
+        for annotation in annotations
+    ]
+
+
+def _format_preserved_group_outputs(
+    states: list[Chem.rdchem.RWMol],
+    preserved_groups: str,
+    source_rings: tuple[tuple[int, ...], ...],
+    annotation_variants: list[str],
+    ext: str,
+) -> list[str]:
+    outputs: set[str] = set()
+    annotations = annotation_variants or [""]
+    for state in states:
+        smiles = _canonical_smiles(state)
+        remap_mol = Chem.Mol(state)
+        Chem.SanitizeMol(remap_mol)
+        remapped_groups = chem_utils.remap_groups(
+            remap_mol,
+            preserved_groups,
+            source_rings,
+        )
+        for annotation in annotations:
+            outputs.add(Translator.build_esmi(smiles, remapped_groups + annotation, ext))
+    return sorted(outputs)
+
+
+def _substitute_precompat_records(
+    groups: str,
+    definitions: Mapping[str, DefinitionValue],
+    *,
+    max_outputs: int,
+    error_msg: bool,
+) -> list[str]:
+    variants = [""]
+    found_record = False
+    for match in _PRECOMPAT_RECORD_PATTERN.finditer(groups):
+        found_record = True
+        record = match.group(0)
+        substruct_match = _SUBSTRUCT_RECORD_PATTERN.match(record)
+        if substruct_match:
+            body = substruct_match.group("body")
+            body_variants = _substitute_markush_outputs(
+                body,
+                definitions,
+                max_outputs=max_outputs,
+                error_msg=error_msg,
+                force_esmiles=True,
+            )
+            record_variants = [f"<s>{body_variant}</s>" for body_variant in body_variants]
+        else:
+            record_variants = [record]
+
+        variants = [
+            prefix + record_variant
+            for prefix in variants
+            for record_variant in record_variants
+        ]
+        if len(variants) > max_outputs:
+            raise ValueError(f"Markush expansion exceeded max_outputs={max_outputs}")
+    return variants if found_record else []
+
+
+def _substitute_markush_outputs(
     caption: str,
     definitions: Mapping[str, DefinitionValue],
     *,
-    max_outputs: int = 1024,
-    error_msg: bool = False,
-) -> str | list[str]:
-    """Substitute Markush definitions into an E-SMILES caption.
-
-    ``definitions`` maps labels such as ``R1`` or ``R[1]`` to either an
-    abbreviation (``Me``) or a SMILES fragment. If the fragment contains ``*``,
-    that atom is treated as the attachment point and removed during merging.
-    Ring-indexed groups are expanded over possible ring attachment positions.
-    """
+    max_outputs: int,
+    error_msg: bool,
+    force_esmiles: bool = False,
+) -> list[str]:
     raw_caption = str(caption).strip()
     parsed = Translator.parse_caption(raw_caption, return_mol=True, error_msg=error_msg)
     if parsed is None:
         raise ValueError(f"Invalid E-SMILES caption: {caption}")
 
-    mol, groups, _ = parsed
+    mol, groups, ext = parsed
+    annotation_variants = _substitute_precompat_records(
+        groups,
+        definitions,
+        max_outputs=max_outputs,
+        error_msg=error_msg,
+    )
     groups = Translator.repair_atom_group_indices(mol, groups, error_msg=error_msg)
     source_rings = mol.GetRingInfo().AtomRings()
     for atom in mol.GetAtoms():
         atom.SetAtomMapNum(atom.GetIdx() + 1)
 
     states = [Chem.RWMol(mol)]
+    special_id_groups: list[str] = []
     for desc in Translator.parse_groups(groups):
         if desc.is_dummy or desc.is_circle:
+            continue
+        if _is_special_id_label(desc):
+            special_id_groups.append(f"{Tokens.atom_start}{int(desc.id)}:{str(desc)}{Tokens.atom_end}")
+            continue
+        if isinstance(desc.id, RingIndex) and desc.id.virtual:
             continue
         if isinstance(desc.id, AtomIndex) and _is_carbon_chain_repeat(desc):
             states = _expand_atom_repetition(states, desc, definitions)
@@ -445,9 +537,40 @@ def substitute_markush(
     smiles = _collect_valid_smiles(states)
     if not smiles:
         raise ValueError("No valid SMILES generated from Markush substitution")
-    if len(smiles) == 1:
-        return smiles[0]
-    return smiles
+    if special_id_groups:
+        return _format_preserved_group_outputs(
+            states,
+            "".join(special_id_groups),
+            source_rings,
+            annotation_variants,
+            ext,
+        )
+    return _format_substitution_outputs(smiles, annotation_variants, ext, force_esmiles)
+
+
+def substitute_markush(
+    caption: str,
+    definitions: Mapping[str, DefinitionValue],
+    *,
+    max_outputs: int = 1024,
+    error_msg: bool = False,
+) -> str | list[str]:
+    """Substitute Markush definitions into an E-SMILES caption.
+
+    ``definitions`` maps labels such as ``R1`` or ``R[1]`` to either an
+    abbreviation (``Me``) or a SMILES fragment. If the fragment contains ``*``,
+    that atom is treated as the attachment point and removed during merging.
+    Ring-indexed groups are expanded over possible ring attachment positions.
+    """
+    outputs = _substitute_markush_outputs(
+        str(caption).strip(),
+        definitions,
+        max_outputs=max_outputs,
+        error_msg=error_msg,
+    )
+    if len(outputs) == 1:
+        return outputs[0]
+    return outputs
 
 
 __all__ = ["substitute_markush"]
