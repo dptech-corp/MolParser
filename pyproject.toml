@@ -11,22 +11,22 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
-    "rdkit>=2025.9.6",
-    "pydantic>=2.12.3",
-    "cairosvg>=2.8.2",
-    "PyYAML>=6.0.0",
+    "rdkit",
+    "pydantic",
+    "cairosvg",
+    "PyYAML",
 ]
 
 [project.optional-dependencies]
 pdf = [
-    "pypdfium2>=4.30.0",
+    "pypdfium2",
 ]
 moldet = [
-    "Pillow>=10.0.0",
-    "ultralytics>=8.3.0",
+    "Pillow",
+    "ultralytics",
 ]
 molparser = [
-    "Pillow>=10.0.0",
+    "Pillow",
     "torch",
     "transformers",
     "huggingface_hub",
@@ -39,7 +39,7 @@ modelscope = [
     "modelscope",
 ]
 inference = [
-    "Pillow>=10.0.0",
+    "Pillow",
     "torch",
     "transformers",
     "huggingface_hub",
@@ -47,8 +47,8 @@ inference = [
     "timm",
     "opencv-python",
     "numpy",
-    "pypdfium2>=4.30.0",
-    "ultralytics>=8.3.0",
+    "pypdfium2",
+    "ultralytics",
     "modelscope",
 ]
 
