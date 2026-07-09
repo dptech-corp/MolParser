@@ -1,4 +1,4 @@
-Pillow>=10.0.0
+Pillow
 torch
 transformers
 huggingface_hub
@@ -6,6 +6,6 @@ safetensors
 timm
 opencv-python
 numpy
-pypdfium2>=4.30.0
-ultralytics>=8.3.0
+pypdfium2
+ultralytics
 modelscope

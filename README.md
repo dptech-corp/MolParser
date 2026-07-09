@@ -253,6 +253,8 @@ Then normalize and render with `mutils.postprocess_caption` and `mutils.draw`.
 
 ## Related resources
 
+Huggingface Homepage: [UniParser/molparser](https://huggingface.co/collections/UniParser/molparser)
+
 - [Uni-Parser](https://arxiv.org/abs/2512.15098) — agent-oriented scientific document parsing with the latest MolParser. [Demo](https://uniparser.dp.tech/)
 - [MolParser](https://arxiv.org/abs/2411.11098) — end-to-end molecular recognition. [Demo](https://ocsr.dp.tech/)
 - [MolDetv2 weights](https://huggingface.co/UniParser/MolDetv2) — lightweight molecule detector. [Demo](https://huggingface.co/spaces/AI4Industry/MolDet)
