@@ -95,6 +95,15 @@ class Tokens:
     atom_end = "</a>"
     circ_start = "<c>"
     circ_end = "</c>"
+    dummy_start = "<d>"
+    dummy_end = "</d>"
+    substruct_start = "<s>"
+    substruct_end = "</s>"
+    sgroup_start = "<g>"
+    sgroup_end = "</g>"
+    virtual_start = "<v>"
+    virtual_end = "</v>"
+    special_id = "<id>"
     ring_start = "<r>"
     ring_end = "</r>"
     dummy = "<dum>"
@@ -108,18 +117,19 @@ class Patterns:
         rf'{"|".join(LONG_CHAR_ELEMENTS) + "|."}'
     )
     grp_content = re.compile(
-        rf"(?P<{TextType.SYMBOL.value}>[A-Za-z0-9-\(\)]*)"
+        rf"(?P<{TextType.SYMBOL.value}>(?:{Tokens.special_id}|[A-Za-z0-9-\(\)]*))"
         + rf"(?P<{TextType.SCRIPT.value}>(\[\S+\])?)"
         + rf"(?P<{TextType.PRIME.value}>[\'\"]?)"
-        + rf"(?P<{TextType.MULTIPLE.value}>(\?([a-z]|\d+|\d-\d)$)?)"
+        + rf"(?P<{TextType.MULTIPLE.value}>(\?([a-z]|\d+|\d+-\d+)$)?)"
     )
     grp_pattern = re.compile(
-        rf"({Tokens.atom_start}|{Tokens.circ_start}|{Tokens.ring_start}|{Tokens.ring_start}{Tokens.circ_start})"
+        rf"({Tokens.atom_start}|{Tokens.circ_start}|{Tokens.dummy_start}|{Tokens.ring_start}|{Tokens.ring_start}{Tokens.circ_start}|{Tokens.ring_start}{Tokens.virtual_start})"
         + r"(\d+:\S+?)"
-        + rf"({Tokens.atom_end}|{Tokens.circ_end}|{Tokens.ring_end})"
+        + rf"({Tokens.atom_end}|{Tokens.circ_end}|{Tokens.dummy_end}|{Tokens.ring_end})"
     )
     trail_pattern = re.compile(
-        r"(?P<groups>([^|]*)?)(?P<extension>(\|\S+\|)?$)"
+        r"(?P<groups>.*?)(?P<extension>\|Sg:[^|]+\|)?$",
+        re.DOTALL,
     )
 
 
@@ -181,10 +191,14 @@ class Translator:
     def remove_atom_groups(cls, groups: str, atom_indices: set[int]) -> str:
         if not atom_indices:
             return groups
-        atom_group_pattern = re.compile(rf"{Tokens.atom_start}(\d+):.+?{Tokens.atom_end}")
+        atom_group_pattern = re.compile(
+            rf"(?P<start>{Tokens.atom_start}|{Tokens.dummy_start})"
+            r"(?P<idx>\d+):.+?"
+            rf"(?P<end>{Tokens.atom_end}|{Tokens.dummy_end})"
+        )
 
         def replace(match: re.Match) -> str:
-            return "" if int(match.group(1)) in atom_indices else match.group(0)
+            return "" if int(match.group("idx")) in atom_indices else match.group(0)
 
         return atom_group_pattern.sub(replace, groups)
 
@@ -195,13 +209,11 @@ class Translator:
         return_mol: bool = False,
         error_msg: bool = False,
     ) -> Optional[Tuple[Union[Chem.rdchem.Mol, str], str, str]]:
-        smi, *trailings = caption.split(Tokens.separator)
-        if len(trailings) != 1:
+        if Tokens.separator not in caption:
             if error_msg:
-                logger.warning(
-                    f"{len(trailings)} `{Tokens.separator}` found in caption: {caption}"
-                )
+                logger.warning(f"No `{Tokens.separator}` found in caption: {caption}")
             return
+        smi, trailing = caption.split(Tokens.separator, 1)
 
         if error_msg:
             RDLogger.EnableLog("rdApp.*")
@@ -211,7 +223,7 @@ class Translator:
             if error_msg:
                 logger.warning(f"Invalid SMILES: {smi}")
             return
-        groups, ext = cls.parse_trailing(trailings[0])
+        groups, ext = cls.parse_trailing(trailing)
         if return_mol:
             return mol, groups, ext
         return smi, groups, ext
@@ -222,7 +234,7 @@ class Translator:
         if matched is None:
             return "", ""
         content = matched.groupdict()
-        return content.get("groups", ""), content.get("extension", "")
+        return content.get("groups") or "", content.get("extension") or ""
 
     @classmethod
     def parse_extension(cls, ext: str) -> str:
@@ -232,19 +244,30 @@ class Translator:
     def parse_groups(cls, seq: str) -> List[GroupDesc]:
         if seq == "":
             return []
+        seq = re.sub(
+            rf"{Tokens.substruct_start}.*?{Tokens.substruct_end}|"
+            rf"{Tokens.sgroup_start}.*?{Tokens.sgroup_end}|"
+            rf"{Tokens.virtual_start}.*?{Tokens.virtual_end}",
+            "",
+            seq,
+            flags=re.DOTALL,
+        )
         descriptions: List[GroupDesc] = []
         for grp_start, grp_content, _ in re.findall(Patterns.grp_pattern, seq):
             parsed = cls.parse_group(grp_content)
             if parsed is None:
                 continue
             idx, grp_text = parsed
-            if grp_start == Tokens.atom_start:
+            if grp_start in (Tokens.atom_start, Tokens.dummy_start):
                 grp_desc = GroupDesc(id=AtomIndex(idx))
-                if len(grp_text) == 0:
+                if len(grp_text) == 0 or grp_start == Tokens.dummy_start:
                     grp_desc.is_dummy = True
             elif grp_start == Tokens.circ_start:
                 grp_desc = GroupDesc(id=AtomIndex(idx), is_circle=True)
-            elif grp_start == f"{Tokens.ring_start}{Tokens.circ_start}":
+            elif grp_start in (
+                f"{Tokens.ring_start}{Tokens.circ_start}",
+                f"{Tokens.ring_start}{Tokens.virtual_start}",
+            ):
                 grp_desc = GroupDesc(id=RingIndex(idx, virtual=True))
             elif grp_start == Tokens.ring_start:
                 grp_desc = GroupDesc(id=RingIndex(idx))
@@ -301,23 +324,44 @@ class Translator:
     ) -> str:
         """Repair atom-group tags that miss their dummy atom."""
         star_indices = [atom.GetIdx() for atom in mol.GetAtoms() if atom.GetSymbol() == "*"]
-        if not star_indices or Tokens.atom_start not in trailing:
+        if not star_indices or (
+            Tokens.atom_start not in trailing and Tokens.dummy_start not in trailing
+        ):
             return trailing
 
-        atom_group_pattern = re.compile(rf"{Tokens.atom_start}(\d+):(.+?){Tokens.atom_end}")
-        matches = list(atom_group_pattern.finditer(trailing))
+        preserved_records: List[str] = []
+        preserved_pattern = re.compile(
+            rf"{Tokens.substruct_start}.*?{Tokens.substruct_end}|"
+            rf"{Tokens.sgroup_start}.*?{Tokens.sgroup_end}|"
+            rf"{Tokens.virtual_start}.*?{Tokens.virtual_end}|"
+            rf"{Tokens.ring_start}{Tokens.virtual_start}\d+:.+?{Tokens.ring_end}",
+            re.DOTALL,
+        )
+
+        def hide_preserved(match: re.Match) -> str:
+            preserved_records.append(match.group(0))
+            return f"@@MOLPARSER_PRESERVED_{len(preserved_records) - 1}@@"
+
+        protected_trailing = preserved_pattern.sub(hide_preserved, trailing)
+
+        atom_group_pattern = re.compile(
+            rf"(?P<start>{Tokens.atom_start}|{Tokens.dummy_start})"
+            r"(?P<idx>\d+):(?P<content>.+?)"
+            rf"(?P<end>{Tokens.atom_end}|{Tokens.dummy_end})"
+        )
+        matches = list(atom_group_pattern.finditer(protected_trailing))
         if not matches:
             return trailing
 
         exact_targets = {
-            int(match.group(1))
+            int(match.group("idx"))
             for match in matches
-            if int(match.group(1)) in star_indices
+            if int(match.group("idx")) in star_indices
         }
         used_targets: set[int] = set()
 
         def replace(match: re.Match) -> str:
-            raw_idx, content = match.group(1), match.group(2)
+            raw_idx, content = match.group("idx"), match.group("content")
             idx = int(raw_idx)
             if idx in star_indices and idx not in used_targets:
                 used_targets.add(idx)
@@ -341,9 +385,12 @@ class Translator:
                     nearest,
                     content,
                 )
-            return f"{Tokens.atom_start}{nearest}:{content}{Tokens.atom_end}"
+            return f"{match.group('start')}{nearest}:{content}{match.group('end')}"
 
-        return atom_group_pattern.sub(replace, trailing)
+        repaired = atom_group_pattern.sub(replace, protected_trailing)
+        for idx, record in enumerate(preserved_records):
+            repaired = repaired.replace(f"@@MOLPARSER_PRESERVED_{idx}@@", record)
+        return repaired
 
     @classmethod
     def refactor(
@@ -362,8 +409,8 @@ class Translator:
                 markush=False,
                 sru=False,
             )
-        if caption.split("<sep>")[-1] == "":
-            smi = caption.split("<sep>")[0]
+        smi, trailing = caption.split(Tokens.separator, 1)
+        if trailing == "":
             canonical_smi = cls.canonicalize_smiles(smi)
             return TranslatedMolecule(
                 smi=canonical_smi,
@@ -374,8 +421,6 @@ class Translator:
                 sru=False,
             )
 
-        smi = caption.split("<sep>")[0]
-        trailing = caption.split("<sep>", 1)[1]
         groups, ext = cls.parse_trailing(trailing)
 
         try:
@@ -416,6 +461,15 @@ class Translator:
             to_remove: List[int] = []
             consumed_atom_groups: set[int] = set()
             preserve_dummy_groups = False
+            preserve_precompat_groups = any(
+                token in groups
+                for token in (
+                    Tokens.substruct_start,
+                    Tokens.sgroup_start,
+                    Tokens.virtual_start,
+                    f"{Tokens.ring_start}{Tokens.virtual_start}",
+                )
+            )
             is_markush = False
             is_sru = False
 
@@ -536,7 +590,7 @@ class Translator:
                 Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
             )
 
-            if is_markush or preserve_dummy_groups:
+            if is_markush or preserve_dummy_groups or preserve_precompat_groups:
                 remaining_groups = cls.remove_atom_groups(groups, consumed_atom_groups)
                 new_groups = chem_utils.remap_groups(mol, remaining_groups, ring_info)
             else:

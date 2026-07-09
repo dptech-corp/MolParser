@@ -13,10 +13,12 @@ except ImportError:  # Support running from package directory as working directo
     from translator import AtomIndex, Translator
 
 
-_RAW_GROUP_PATTERN = re.compile(r"<(?P<tag>a|c|r)>(?P<idx>\d+):(?P<label>.+?)</(?P=tag)>")
+_RAW_GROUP_PATTERN = re.compile(r"<(?P<tag>a|c|d|r)>(?P<idx>\d+):(?P<label>.+?)</(?P=tag)>")
+_PRECOMPAT_PATTERN = re.compile(r"<s>.*?</s>|<g>.*?</g>|<v>.*?</v>", re.DOTALL)
 
 
 def _raw_groups(groups: str) -> list[tuple[str, int, str]]:
+    groups = _PRECOMPAT_PATTERN.sub("", groups)
     return [
         (match.group("tag"), int(match.group("idx")), match.group("label"))
         for match in _RAW_GROUP_PATTERN.finditer(groups)
@@ -50,7 +52,7 @@ def _apply_raw_atom_labels(mol: Chem.rdchem.Mol, groups: str) -> None:
             continue
         if tag == "c":
             mol.GetAtomWithIdx(atom_idx).SetProp("atomLabel", f"c{label}")
-        elif tag == "a" and label.startswith("<") and label != "<dum>":
+        elif tag == "a" and label.startswith("<") and label not in ("<dum>", "<id>") and not label.startswith("<id>["):
             mol.GetAtomWithIdx(atom_idx).SetProp("atomLabel", label)
 
 

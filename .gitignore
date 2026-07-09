@@ -6,7 +6,11 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+*.egg-info/
 
 *.svg
 *.png
 !skills/**/assets/**/*.png
+
+output*/
+TODO

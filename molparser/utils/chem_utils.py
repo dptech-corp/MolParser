@@ -41,10 +41,20 @@ def get_mol(smi: str) -> Chem.rdchem.Mol:
     return mol
 
 
-def split_groups(groups: str) -> Tuple[Dict[int, str], Dict[int, str]]:
-    pattern = r"<(?P<type>r|a)>(?P<content>.*?)</(?P=type)>"
-    matches = re.finditer(pattern, groups)
-    a_groups: Dict[int, str] = {}
+def _preserved_records(groups: str) -> str:
+    pattern = r"<s>.*?</s>|<g>.*?</g>|<v>.*?</v>|<r><v>\d+:.+?</r>"
+    return "".join(match.group(0) for match in re.finditer(pattern, groups, re.DOTALL))
+
+
+def _strip_preserved_records(groups: str) -> str:
+    pattern = r"<s>.*?</s>|<g>.*?</g>|<v>.*?</v>|<r><v>\d+:.+?</r>"
+    return re.sub(pattern, "", groups, flags=re.DOTALL)
+
+
+def split_groups(groups: str) -> Tuple[Dict[int, Dict[str, str]], Dict[int, str]]:
+    pattern = r"<(?P<type>r|a|d)>(?P<content>.*?)</(?P=type)>"
+    matches = re.finditer(pattern, _strip_preserved_records(groups))
+    a_groups: Dict[int, Dict[str, str]] = {}
     r_groups: Dict[int, str] = {}
 
     for m in matches:
@@ -54,17 +64,20 @@ def split_groups(groups: str) -> Tuple[Dict[int, str], Dict[int, str]]:
             ind, content = text.split(":", 1)
         else:
             ind, content = "", text
+        if not ind.isdigit():
+            continue
         if type_ == "r":
             r_groups[int(ind)] = content
         else:
-            a_groups[int(ind)] = content
+            a_groups[int(ind)] = {"content": content, "type": type_}
     return a_groups, r_groups
 
 
 def get_groups_str(a_groups: Dict[int, Dict], r_groups: Dict[int, Dict] | None = None) -> str:
     groups_str = ""
     for k, v in sorted(a_groups.items(), key=lambda x: x[0]):
-        groups_str += f"<a>{k}:{v['content']}</a>"
+        tag = v.get("type", "a")
+        groups_str += f"<{tag}>{k}:{v['content']}</{tag}>"
     if r_groups is not None:
         for k, v in sorted(r_groups.items(), key=lambda x: x[0]):
             groups_str += f"<r>{k}:{v['content']}</r>"
@@ -160,7 +173,7 @@ def remap_groups(mol: Chem.rdchem.Mol, groups: str, ring_info: tuple) -> str:
         new_ind = internal_to_output.get(internal_ind, internal_ind)
         group = old_ind2agroup.get(old_ind)
         if group is not None:
-            new_ind2agroup[new_ind] = {"content": group, "type": "a"}
+            new_ind2agroup[new_ind] = group
 
     new_ind2rgroup: Dict[int, Dict] = {}
     if old_ind2rgroup:
@@ -187,7 +200,7 @@ def remap_groups(mol: Chem.rdchem.Mol, groups: str, ring_info: tuple) -> str:
             if new_ring_idx is not None:
                 new_ind2rgroup[new_ring_idx] = {"content": group, "type": "r"}
 
-    return get_groups_str(new_ind2agroup, new_ind2rgroup)
+    return get_groups_str(new_ind2agroup, new_ind2rgroup) + _preserved_records(groups)
 
 
 def carbon_chain_repetition_process(mol, atom_id, desc, is_markush, error_msg=False):

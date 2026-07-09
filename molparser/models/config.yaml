@@ -1,0 +1,28 @@
+moldet:
+  hf_repo: UniParser/MolDetv2
+  modelscope_repo: UniParser/MolDetv2
+  image_model_path: ""
+  pdf_model_path: ""
+  image_modelname: moldet_v2_yolo11n_640_general.pt
+  pdf_modelname: moldet_v2_yolo11n_960_doc.pt
+  confidence: 0.5
+  image_imgsz: 640
+  pdf_imgsz: 960
+  batch_size: 8
+  expand_px: 2
+
+molparser:
+  hf_repo: UniParser/MolParser-Mobile
+  modelscope_repo: UniParser/MolParser-Mobile
+  model_path: ""
+  max_length: 256
+  batch_size: 32
+  padding_px: 0
+
+pdf:
+  dpi: 200
+
+runtime:
+  device: auto
+  cache_dir: ""
+  hf_token: null
