@@ -234,7 +234,7 @@ cairosvg.svg2png(url=str(svg_path), write_to=str(png_path))
 
 Rendered example:
 
-Rendered E-SMILES example
+![Rendered E-SMILES example](skills/molparser-extended-smiles/assets/images/readme_molecule.svg)
 
 **Updates**
 
@@ -242,7 +242,7 @@ Rendered E-SMILES example
 
 E-SMILES: `C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>`
 
-VirtualArc rendering
+![VirtualArc rendering](skills/molparser-extended-smiles/assets/images/virtual_arc_with_r3.svg)
 
 ## LLM / OCSR workflow
 
