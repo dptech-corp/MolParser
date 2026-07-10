@@ -118,6 +118,7 @@ def alter_atom(
     else:
         raise ValueError("Either smiles or element must be provided")
 
+    atom.SetIsotope(0)
     atom.SetNumExplicitHs(0)
     atom.SetNoImplicit(False)
     if atom.GetDegree() == 1:
@@ -215,6 +216,7 @@ def carbon_chain_repetition_process(mol, atom_id, desc, is_markush, error_msg=Fa
         atom.SetNumExplicitHs(0)
         atom.SetNoImplicit(False)
         atom.SetIsAromatic(False)
+        atom.SetIsotope(0)
         atom.SetChiralTag(Chem.ChiralType.CHI_UNSPECIFIED)
 
         for bond in atom.GetBonds():
