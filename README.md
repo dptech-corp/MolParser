@@ -34,16 +34,18 @@ from molparser import utils as mutils
 
 ### OCSR Inference
 
-`MolParser` can parse a PIL image, local path, URL, PDF path, PDF URL, or a list of those inputs. Defaults live in `molparser/models/config.yaml`, and you can override them with a custom YAML file or keyword arguments. Hugging Face is tried first, then ModelScope is used as a fallback when configured.
+`MolParser` accepts a PIL image, local path, URL, PDF path/URL, or a list of those. Pass a custom YAML or kwargs to override defaults.
 
-Device can be set with `device`: `"auto"` uses CUDA when available and otherwise CPU; use `"cpu"`, `"cuda"`, or `"cuda:0"` to force a device.
-
-Use `rec_only=True` when images are already single molecule crops. Use `rec_only=False` when image detection is needed. PDF inputs are rendered first, then detected with the PDF MolDet model before recognition.
+Use `rec_only=True` for single-molecule crops; `rec_only=False` to run image detection. PDFs are rendered, then detected with the PDF MolDet model.
 
 ```python
 from molparser import MolParser
 
-parser = MolParser()  # default: device="auto"; use device="cpu" or "cuda" to force one
+parser = MolParser()
+# default config : molparser/models/config.yaml
+# default device : "auto"  (or "cpu" / "cuda")
+# default MolDet model : UniParser/MolDetv2   (auto-download)
+# default OCSR model : UniParser/MolParser-Mobile  (auto-download)
 
 # Single image path.
 image_results = parser.parse("mol.png", rec_only=True)
