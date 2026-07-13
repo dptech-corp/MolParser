@@ -393,6 +393,82 @@ class Translator:
         return repaired
 
     @classmethod
+    def _protect_stereo_for_dummy_substitution(
+        cls,
+        smi: str,
+        groups: str,
+        abbrev_map: Dict[str, str],
+        probe: Chem.rdchem.Mol,
+        error_msg: bool = False,
+    ) -> Tuple[str, set[int]]:
+        """Temporarily distinguish substitutable dummy atoms for RDKit stereo parsing."""
+        if "@" not in smi or "*" not in smi:
+            return smi, set()
+
+        star_indices = [atom.GetIdx() for atom in probe.GetAtoms() if atom.GetSymbol() == "*"]
+        if len(star_indices) < 2:
+            return smi, set()
+
+        substitutable_indices: set[int] = set()
+        for desc in cls.parse_groups(groups):
+            if not isinstance(desc.id, AtomIndex) or desc.is_dummy or not desc.symbol:
+                continue
+            lookup_symbol = desc.symbol + (desc.script or "")
+            if (
+                desc.symbol == "CH2"
+                or (desc.symbol == "CH" and desc.script == "2")
+                or lookup_symbol == "CN"
+                or lookup_symbol in abbrev_map
+            ):
+                substitutable_indices.add(int(desc.id))
+            elif lookup_symbol in PERIODIC_TABLE and not desc.multiple:
+                substitutable_indices.add(int(desc.id))
+
+        if not substitutable_indices.intersection(star_indices):
+            return smi, set()
+
+        dummy_tokens: List[Tuple[int, int]] = []
+        cursor = 0
+        while cursor < len(smi):
+            if smi[cursor] == "[":
+                closing = smi.find("]", cursor + 1)
+                if closing < 0:
+                    return smi, set()
+                if smi[cursor : closing + 1] == "[*]":
+                    dummy_tokens.append((cursor, closing + 1))
+                cursor = closing + 1
+                continue
+            if smi[cursor] == "*":
+                dummy_tokens.append((cursor, cursor + 1))
+            cursor += 1
+
+        if len(dummy_tokens) != len(star_indices):
+            if error_msg:
+                logger.warning("Unable to align dummy atoms for stereo preservation")
+            return smi, set()
+
+        used_isotopes = {atom.GetIsotope() for atom in probe.GetAtoms()}
+        temporary_isotopes: set[int] = set()
+        next_isotope = 1
+        protected_parts: List[str] = []
+        last_end = 0
+
+        for (start, end), atom_idx in zip(dummy_tokens, star_indices):
+            protected_parts.append(smi[last_end:start])
+            if atom_idx in substitutable_indices:
+                while next_isotope in used_isotopes:
+                    next_isotope += 1
+                protected_parts.append(f"[{next_isotope}*]")
+                temporary_isotopes.add(next_isotope)
+                used_isotopes.add(next_isotope)
+                next_isotope += 1
+            else:
+                protected_parts.append(smi[start:end])
+            last_end = end
+        protected_parts.append(smi[last_end:])
+        return "".join(protected_parts), temporary_isotopes
+
+    @classmethod
     def refactor(
         cls,
         caption: str,
@@ -424,7 +500,27 @@ class Translator:
         groups, ext = cls.parse_trailing(trailing)
 
         try:
-            mol = Chem.MolFromSmiles(smi)
+            abbrev_map = chem_utils.get_abbrev_smi()
+            raw_mol = Chem.MolFromSmiles(smi)
+            if raw_mol is None:
+                if error_msg:
+                    logger.warning(f"Invalid SMILES: {smi}")
+                return TranslatedMolecule(
+                    smi=smi,
+                    groups=groups,
+                    caption=caption,
+                    esmi=cls.build_esmi(smi, groups, ext),
+                    markush=len(groups) > 0,
+                    sru=False,
+                )
+            repaired_groups = cls.repair_atom_group_indices(raw_mol, groups, error_msg=error_msg)
+            if repaired_groups != groups:
+                groups = repaired_groups
+                caption = cls.build_esmi(smi, groups, ext)
+            stereo_safe_smi, temporary_isotopes = cls._protect_stereo_for_dummy_substitution(
+                smi, groups, abbrev_map, raw_mol, error_msg=error_msg
+            )
+            mol = raw_mol if stereo_safe_smi == smi else Chem.MolFromSmiles(stereo_safe_smi)
             if mol is None:
                 if error_msg:
                     logger.warning(f"Invalid SMILES: {smi}")
@@ -436,10 +532,6 @@ class Translator:
                     markush=len(groups) > 0,
                     sru=False,
                 )
-            repaired_groups = cls.repair_atom_group_indices(mol, groups, error_msg=error_msg)
-            if repaired_groups != groups:
-                groups = repaired_groups
-                caption = cls.build_esmi(smi, groups, ext)
             for atom in mol.GetAtoms():
                 atom.SetAtomMapNum(atom.GetIdx() + 1)
             ring_info = mol.GetRingInfo().AtomRings()
@@ -475,8 +567,6 @@ class Translator:
 
             if cls.parse_extension(ext) == "Sg:n":
                 is_sru = True
-
-            abbrev_map = chem_utils.get_abbrev_smi()
 
             for desc in cls.parse_groups(groups):
                 if not isinstance(desc.id, AtomIndex) or desc.is_circle:
@@ -572,8 +662,16 @@ class Translator:
             for i in sorted(to_remove, reverse=True):
                 mol.RemoveAtom(i)
 
+            cleared_temporary_isotopes = False
+            for atom in mol.GetAtoms():
+                if atom.GetSymbol() == "*" and atom.GetIsotope() in temporary_isotopes:
+                    atom.SetIsotope(0)
+                    cleared_temporary_isotopes = True
+
             try:
                 Chem.SanitizeMol(mol)
+                if cleared_temporary_isotopes:
+                    Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
             except Exception as e:
                 if error_msg:
                     logger.error(f"Sanitize failed: {e}")
