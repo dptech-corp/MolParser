@@ -16,6 +16,8 @@ MolParser is a toolkit for **OCSR** (Optical Chemical Structure Recognition) wor
 ## Installation
 
 ```bash
+git clone https://github.com/dptech-corp/MolParser.git
+cd MolParser
 pip install -e .
 ```
 
