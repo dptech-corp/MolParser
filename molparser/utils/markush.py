@@ -23,6 +23,12 @@ _PRECOMPAT_RECORD_PATTERN = re.compile(
     re.DOTALL,
 )
 _SUBSTRUCT_RECORD_PATTERN = re.compile(r"^<s>(?P<body>.*)</s>$", re.DOTALL)
+_SGROUP_COUNT_PATTERN = re.compile(r"\|Sg:(?P<count>[^|]+)\|")
+_SGROUP_SYMBOL_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+_PRESERVED_ATOM_RECORD_PATTERN = re.compile(
+    r"<(?P<tag>a|d)>(?P<index>\d+):(?P<value>.*?)</(?P=tag)>",
+    re.DOTALL,
+)
 
 
 def _normalize_label(label: str) -> str:
@@ -77,6 +83,65 @@ def _resolve_group_smiles(
 def _resolve_fragment_smiles(value: str) -> str:
     value = str(value).strip()
     return chem_utils.get_abbrev_smi().get(value, value)
+
+
+def _resolve_sgroup_count(
+    count: str,
+    definitions: Mapping[str, DefinitionValue],
+) -> str:
+    """Resolve a symbolic ``|Sg:...|`` count without expanding its graph."""
+    clean_count = count.strip()
+    if not _SGROUP_SYMBOL_PATTERN.fullmatch(clean_count):
+        return count
+
+    definition_lookup = _definition_lookup(definitions)
+    if clean_count not in definition_lookup:
+        return count
+    value = definition_lookup[clean_count]
+
+    if isinstance(value, Sequence) and not isinstance(value, str):
+        raise ValueError(
+            f"S-group count `{clean_count}` must resolve to one positive integer"
+        )
+    if isinstance(value, bool):
+        raise ValueError(
+            f"S-group count `{clean_count}` must resolve to one positive integer"
+        )
+    if isinstance(value, int):
+        resolved = value
+    elif isinstance(value, str) and value.strip().isdigit():
+        resolved = int(value.strip())
+    else:
+        raise ValueError(
+            f"S-group count `{clean_count}` must resolve to one positive integer"
+        )
+    if resolved < 1:
+        raise ValueError(
+            f"S-group count `{clean_count}` must resolve to one positive integer"
+        )
+    return str(resolved)
+
+
+def _substitute_sgroup_counts(
+    text: str,
+    definitions: Mapping[str, DefinitionValue],
+) -> str:
+    def replace(match: re.Match) -> str:
+        resolved = _resolve_sgroup_count(match.group("count"), definitions)
+        return f"|Sg:{resolved}|"
+
+    return _SGROUP_COUNT_PATTERN.sub(replace, text)
+
+
+def _preserved_top_level_atom_records(groups: str) -> str:
+    """Keep dummy and special-id records outside nested pre-compatible records."""
+    top_level_groups = _PRECOMPAT_RECORD_PATTERN.sub("", groups)
+    records: list[str] = []
+    for match in _PRESERVED_ATOM_RECORD_PATTERN.finditer(top_level_groups):
+        value = match.group("value")
+        if value == Tokens.dummy or value.startswith(f"{Tokens.special_id}["):
+            records.append(match.group(0))
+    return "".join(records)
 
 
 def _repeat_counts(desc: GroupDesc, site_count: int) -> list[int]:
@@ -394,7 +459,7 @@ def _format_substitution_outputs(
     ext: str,
     force_esmiles: bool,
 ) -> list[str]:
-    if not force_esmiles and not annotation_variants:
+    if not force_esmiles and not annotation_variants and not ext:
         return smiles
 
     annotations = annotation_variants or [""]
@@ -452,7 +517,7 @@ def _substitute_precompat_records(
             )
             record_variants = [f"<s>{body_variant}</s>" for body_variant in body_variants]
         else:
-            record_variants = [record]
+            record_variants = [_substitute_sgroup_counts(record, definitions)]
 
         variants = [
             prefix + record_variant
@@ -478,6 +543,7 @@ def _substitute_markush_outputs(
         raise ValueError(f"Invalid E-SMILES caption: {caption}")
 
     mol, groups, ext = parsed
+    ext = _substitute_sgroup_counts(ext, definitions)
     annotation_variants = _substitute_precompat_records(
         groups,
         definitions,
@@ -490,12 +556,11 @@ def _substitute_markush_outputs(
         atom.SetAtomMapNum(atom.GetIdx() + 1)
 
     states = [Chem.RWMol(mol)]
-    special_id_groups: list[str] = []
+    preserved_atom_groups = _preserved_top_level_atom_records(groups)
     for desc in Translator.parse_groups(groups):
         if desc.is_dummy or desc.is_circle:
             continue
         if _is_special_id_label(desc):
-            special_id_groups.append(f"{Tokens.atom_start}{int(desc.id)}:{str(desc)}{Tokens.atom_end}")
             continue
         if isinstance(desc.id, RingIndex) and desc.id.virtual:
             continue
@@ -537,10 +602,10 @@ def _substitute_markush_outputs(
     smiles = _collect_valid_smiles(states)
     if not smiles:
         raise ValueError("No valid SMILES generated from Markush substitution")
-    if special_id_groups:
+    if preserved_atom_groups:
         return _format_preserved_group_outputs(
             states,
-            "".join(special_id_groups),
+            preserved_atom_groups,
             source_rings,
             annotation_variants,
             ext,

@@ -6,7 +6,7 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 from rdkit import Chem, RDLogger
 
@@ -20,14 +20,14 @@ except ImportError:  # Support running from package directory as working directo
 PERIODIC_TABLE = {
     "H", "He", "Li", "Be", "C", "N", "O", "F", "Ne",
     "Na", "Mg", "Al", "Si", "P", "S", "Cl", "K", "Ca",
-    "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn",
+    "Sc", "Ti", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn",
     "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr", "Zr",
     "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn",
     "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Nd",
     "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb",
     "Lu", "Hf", "Ta", "Re", "Os", "Ir", "Pt", "Au", "Hg",
     "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra", "Th",
-    "Pa", "U",
+    "Pa",
 }
 
 
@@ -562,10 +562,13 @@ class Translator:
                     f"{Tokens.ring_start}{Tokens.virtual_start}",
                 )
             )
-            is_markush = False
+            is_markush = preserve_precompat_groups
             is_sru = False
 
-            if cls.parse_extension(ext) == "Sg:n":
+            if re.fullmatch(
+                r"Sg:[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?",
+                cls.parse_extension(ext),
+            ):
                 is_sru = True
 
             for desc in cls.parse_groups(groups):
@@ -742,6 +745,32 @@ class Translator:
             esmi,
             source_groups=raw_groups,
             sru=is_sru,
+        )
+
+    @classmethod
+    def substitute_markush(
+        cls,
+        caption: str,
+        definitions: Mapping[str, Union[int, str, Sequence[str]]],
+        *,
+        max_outputs: int = 1024,
+        error_msg: bool = False,
+    ) -> Union[str, List[str]]:
+        """Substitute Markush labels and symbolic S-group counts.
+
+        The import is intentionally local because ``markush`` uses the parser
+        types defined in this module.
+        """
+        try:
+            from .markush import substitute_markush as _substitute_markush
+        except ImportError:  # Support running from package directory.
+            from markush import substitute_markush as _substitute_markush
+
+        return _substitute_markush(
+            caption,
+            definitions,
+            max_outputs=max_outputs,
+            error_msg=error_msg,
         )
 
 

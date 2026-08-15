@@ -68,7 +68,7 @@ Example:
 
 ### Dummy Attachment Point
 
-`<d>[ATOM_INDEX]:<dum></d>` marks an explicit dummy atom attachment point. This is the new SMILES 2.0 representation. The legacy `<a>[ATOM_INDEX]:<dum></a>` form remains valid for backward compatibility.
+`<d>[ATOM_INDEX]:<dum></d>` marks an explicit dummy atom attachment point. This is the E-SMILES 2.0 representation. The legacy `<a>[ATOM_INDEX]:<dum></a>` form remains valid for backward compatibility.
 
 ```text
 *C(O)=O<sep><d>0:<dum></d>
@@ -79,14 +79,19 @@ Example:
 `<v>[VIRTUALARC_INDEX]:[VIRTUALARC_NAME]:[FROM_ATOM:TO_ATOM]</v>` records a special abstract ring connection.
 
 - `VIRTUALARC_INDEX`: zero-based index in a namespace separate from atoms and rings.
-- `VIRTUALARC_NAME`: source label such as `A`, `Ar`, or `M`.
-- `FROM_ATOM` and `TO_ATOM`: zero-based base-SMILES atom indexes for the unordered endpoints; `[0:2]` and `[2:0]` are equivalent.
+- `VIRTUALARC_NAME`: source label such as `A`, `Ar`, or `M`; it may be empty when the source arc is unnamed, for example `<v>0::[0:2]</v>`.
+- `FROM_ATOM` and `TO_ATOM`: zero-based base-SMILES atom indexes for the endpoints. General readers may accept `[0:2]` and legacy `[2:0]` as equivalent. New datasets should emit the canonical order described below.
 - A substituent attached to a virtualArc uses `<r><v>[VIRTUALARC_INDEX]:[GROUP_LABEL]</r>`.
-- Current utilities preserve these records as pre-compatible annotations; they do not expand or render the virtualArc geometry.
+- Current utilities preserve these records as pre-compatible annotations. The drawer renders their virtual-arc geometry, while normalization and Markush substitution do not turn the annotation into a chemical bond.
 
 ```text
 C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 ```
+
+For newly generated data, normalize every pair to `FROM_ATOM < TO_ATOM`, sort
+multiple pairs lexicographically, and then assign consecutive virtualArc ids
+`0..n-1`. Rebind names, substituents, and `<r><v>` references after sorting.
+Keep legacy reversed endpoints readable for backward compatibility.
 
 ## 3. Multiplicity And Structural Repetition
 
@@ -104,7 +109,9 @@ Use `|Sg:n|` for structural repeating unit (SRU) repetition:
 *CC*<sep><d>0:<dum></d><d>2:<dum></d>|Sg:n|
 ```
 
-Current `molparser.utils.postprocess_caption` recognizes `|Sg:n|` as the SRU marker.
+Current `molparser.utils.postprocess_caption` recognizes syntactically valid
+`|Sg:COUNT|` forms, including symbolic, numeric, and simple range counts, as SRU
+markers.
 
 Use `<s>...</s>` for a nested substructure record, typically a ring-external repeat fragment. The body is another `SMILES<sep>EXTENSION` fragment.
 
@@ -118,7 +125,8 @@ Use `<g>[INNER_PORT:OUTER_PORT]:...:|Sg:n|</g>` for an s-group repeat record.
 - `OUTER_PORT`: atom index outside the repeat structure.
 - Multiple port pairs are written by repeating `[INNER_PORT:OUTER_PORT]` and separating fields with `:`.
 - The repeat count defaults to `n` when abstract; explicit numbers, letters, and ranges such as `20`, `m`, or `m-n` are syntactically accepted.
-- Current utilities preserve `<s>` and `<g>` records as pre-compatible annotations; they do not expand repeat structures.
+- Current utilities preserve `<s>` and `<g>` records as pre-compatible annotations; they do not expand repeat structures. `substitute_markush` may replace a symbolic `<g>` count with one positive integer supplied in the definition dictionary, but it leaves the graph and `<g>` annotation structure intact.
+- Round parentheses and square brackets are equivalent drawing styles for the same `<g>` record; bracket shape is not encoded in E-SMILES.
 
 ```text
 C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><g>[3:2]:[4:5]:|Sg:20|</g>
@@ -128,16 +136,16 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><g>[3:2]:[4:5]:|Sg:20|</g>
 
 - Common abbreviations: `Me`, `OMe`, `Ph`, `CF3`.
 - Markush placeholders: `R[1]`, `R[2]`, `X[1]`.
-- Special Markush labels: `<id>[DNA]`, `<id>[RNA]`, `<id>[protein]`, or other task-specific notes.
+- Special Markush labels: `<id>[DNA]`, `<id>[RNA]`, `<id>[protein]`, or other task-specific notes. Fixed-color endpoint-ball labels such as `<id>[blue]` are a MolParser project extension used in E-SMILES 2.0 workflows, not a general chemical identity token.
 - Dataset-specific labels may appear as payload text when they cannot be reduced to a standard abbreviation.
 
 ## 5. Utility Behavior
 
 - `molparser.utils.postprocess_caption` / `Translator.refactor` canonicalize SMILES and substitute known atom-indexed abbreviations from `molparser/utils/abbrevs_example.csv` when the attachment is chemically valid.
 - Resolved substituents are folded into the base `smi`; unresolved Markush or ring-level annotations remain in `groups`.
-- Pre-compatible `<s>` records are preserved in `groups`; `substitute_markush` can recursively substitute labels inside the nested substructure and return the result as an E-SMILES annotation, without attaching or expanding it into the main molecule.
-- Pre-compatible `<g>`, `<v>`, and `<r><v>...` records are preserved in `groups` but are not chemically expanded, remapped, or specially rendered yet.
-- `draw` renders SMILES or E-SMILES to SVG/PNG for visual QA.
+- Pre-compatible `<s>` records are preserved in `groups`; `substitute_markush` can substitute labels inside one single-level substructure record and return the result as an E-SMILES annotation, without attaching or expanding it into the main molecule. An `<s>` nested inside another `<s>` is outside the supported grammar and is rejected.
+- Pre-compatible `<g>`, `<v>`, and `<r><v>...` records are preserved in `groups` and are not chemically expanded or remapped by substitution. A symbolic `<g>` count can resolve to one positive integer without physical expansion. Use the gates in `references/synthetic-examples.md` before publishing snapshot assets.
+- `draw` renders SMILES or E-SMILES to SVG/PNG for visual QA, including SRU and local-repeat brackets, virtual arcs, and approved MolParser endpoint-ball labels. `draw_many` provides ordered process-parallel rendering for large independent batches.
 
 ## 6. Unsupported Chemistry
 
@@ -159,3 +167,5 @@ Preserve the encodable backbone, do not invent tokens, and report unencoded chem
 - local substructure multiplicity uses `?n`, `?1-3`, or `?3`;
 - SRU repetition uses `|Sg:n|` or an explicit count such as `|Sg:20|`;
 - supported extension indexes are regenerated after canonicalization or substitution; pre-compatible `<s>`, `<g>`, and `<v>` annotations are preserved without semantic remapping.
+- an unnamed virtualArc uses an empty name field, `<v>0::[START:END]</v>`;
+- newly generated virtualArc pairs use `START < END`, lexicographic pair order, and consecutive ids, while readers remain tolerant of legacy reversed endpoints.

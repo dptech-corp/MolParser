@@ -1,6 +1,6 @@
 ---
 name: molparser-extended-smiles
-description: "Use for MolParser E-SMILES generation, validation, normalization, abbreviation substitution, Markush definition substitution, rendering, and repair in OCSR/Markush workflows, including atom-indexed substituents, regio-uncertain ring attachments, abstract-ring superatoms, dummy attachment points, local substructure multiplicity suffixes, and SRU repeat markers."
+description: "Use for MolParser E-SMILES generation, validation, normalization, abbreviation substitution, Markush definition substitution, rendering, and repair in OCSR/Markush workflows, including atom-indexed substituents, regio-uncertain ring attachments, abstract-ring superatoms, dummy attachment points, local substructure multiplicity suffixes, virtual arcs, SRU repeat markers, and MolParser colored endpoint-ball labels."
 ---
 
 # MolParser E-SMILES Skill
@@ -16,8 +16,8 @@ Use this skill when reading, writing, validating, normalizing, or rendering MolP
    - `<a>[ATOM_INDEX]:<id>[NOTE]</a>`: special Markush label with a custom note such as `DNA`, `RNA`, `protein`, `red`, or `ball`.
    - `<r>[RING_INDEX]:[GROUP_LABEL]</r>`: ring-indexed substituent with unspecified attachment atom.
    - `<c>[ATOM_INDEX]:[RING_LABEL]</c>`: abstract-ring or superatom placeholder at a dummy atom.
-   - `<d>[ATOM_INDEX]:<dum></d>`: explicit dummy attachment point. This is the new SMILES 2.0 form; legacy `<a>[ATOM_INDEX]:<dum></a>` is still accepted.
-   - `<v>[VIRTUALARC_INDEX]:[VIRTUALARC_NAME]:[FROM_ATOM:TO_ATOM]</v>`: pre-compatible virtualArc annotation for a special abstract ring.
+   - `<d>[ATOM_INDEX]:<dum></d>`: explicit dummy attachment point. This is the E-SMILES 2.0 form; legacy `<a>[ATOM_INDEX]:<dum></a>` is still accepted.
+   - `<v>[VIRTUALARC_INDEX]:[VIRTUALARC_NAME]:[FROM_ATOM:TO_ATOM]</v>`: pre-compatible virtualArc annotation for a special abstract ring; the name field may be empty.
    - `<r><v>[VIRTUALARC_INDEX]:[GROUP_LABEL]</r>`: pre-compatible substituent attached to a virtualArc.
    - `<s>[SUBSTRUCTURE_ESMILES]</s>`: pre-compatible nested substructure record for ring-external repeat fragments.
    - `<g>[INNER_PORT:OUTER_PORT]:...:|Sg:n|</g>`: pre-compatible s-group repeat record.
@@ -75,8 +75,8 @@ result = mutils.substitute_markush(
 - Multiplicity suffixes `?3`, `?1-3`, and `?n` encode local substructure
   replication; `?n` reads the replication count from the definition dictionary, e.g.
   `<a>2:CH2?n</a>` with `{"n": 10}`.
-- Pre-compatible `<s>` records are recursively substituted by `substitute_markush` and returned as preserved E-SMILES annotations, e.g. `<s>**<sep><a>0:L[3]</a><a>1:R[3]</a>|Sg:n|</s>` can become `<s>ClBr<sep>|Sg:n|</s>`. This does not change the existing `?n` copy behavior.
-- Pre-compatible `<g>`, `<v>`, and `<r><v>...` records are preserved as annotations and are not expanded by `substitute_markush`.
+- Labels inside a single-level pre-compatible `<s>` record are substituted by `substitute_markush`, and the record is returned as a preserved E-SMILES annotation, e.g. `<s>**<sep><a>0:L[3]</a><a>1:R[3]</a>|Sg:n|</s>` can become `<s>ClBr<sep>|Sg:n|</s>`. An `<s>` nested inside another `<s>` is rejected. This does not change the existing `?n` copy behavior.
+- Pre-compatible `<g>`, `<v>`, and `<r><v>...` records remain annotations and are not physically expanded by `substitute_markush`. A symbolic `<g>` count may be replaced with one positive integer from the definition dictionary, for example `|Sg:n|` with `{"n": 20}` becomes `|Sg:20|` while the molecular graph is unchanged.
 
 ## Rendering
 
@@ -87,9 +87,18 @@ from molparser import utils as mutils
 
 svg_text = mutils.draw(result["esmi"], output_format="svg")
 png_bytes = mutils.draw(result["esmi"], output_format="png")
+
+# For large independent batches on Linux, workers > 1 uses a process pool.
+svg_batch = mutils.draw_many(raw_esmiles_batch, output_format="svg", workers=4)
 ```
 
 The drawer displays atom substituents, dummy attachment points, abstract rings, and ring-level annotations from the E-SMILES extension.
+
+For Whole SRU, local repeats, all four named/unnamed virtual-arc appearances,
+and fixed-color endpoint balls, read
+[`references/synthetic-examples.md`](references/synthetic-examples.md). Draw the
+raw E-SMILES fixture. Do not call `substitute_markush` first unless the user has
+explicitly requested concrete Markush expansion.
 
 ## Validation Priorities
 
@@ -97,6 +106,7 @@ The drawer displays atom substituents, dummy attachment points, abstract rings, 
 - Nested `<s>` records may contain an additional `<sep>` for the substructure E-SMILES.
 - `<a>` indexes atoms; `<d>` indexes explicit dummy attachment points; `<r>` indexes rings; `<c>` indexes the dummy atom carrying the abstract-ring label.
 - `<v>` indexes virtualArc annotations in a separate namespace; `<r><v>0:R[3]</r>` attaches an unresolved group to virtualArc `0`.
+- A virtualArc name may be empty. For new datasets, emit canonical endpoint pairs with `start < end`, sort multiple pairs lexicographically, assign consecutive ids, and rebind `<r><v>` references; continue accepting legacy reversed endpoints when reading.
 - `<g>` port pairs use `[INNER_PORT:OUTER_PORT]`; repeat count defaults to `n` and may be explicit, e.g. `|Sg:20|`.
 - `GROUP_LABEL` may be a common abbreviation (`Me`, `OMe`, `CF3`), a Markush label (`R[1]`), or a special Markush label `<id>[NOTE]`. For dummy attachment points, prefer `<d>[ATOM_INDEX]:<dum></d>` and accept legacy `<a>[ATOM_INDEX]:<dum></a>`.
 - Use local substructure multiplicity suffixes (`?n`, `?1-3`, `?3`) separately from SRU-level `|Sg:n|`.
@@ -111,5 +121,7 @@ The drawer displays atom substituents, dummy attachment points, abstract rings, 
 
 1. `extended-smiles-spec.md`
 2. `figure-index.md`
-3. `validate_esmiles.py`
-4. `source-provenance.md`
+3. `references/synthetic-examples.md` when repeat, virtual-arc, or endpoint-ball examples are needed
+4. `references/synthetic-examples.json` when exact fixture E-SMILES, render configuration, or provenance hashes are needed
+5. `validate_esmiles.py`
+6. `source-provenance.md`

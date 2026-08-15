@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" baseProfile="full" xml:space="preserve" width="72.0px" height="58.0px" viewBox="0.0 0.0 72.0 58.0" overflow="visible">
+
+<rect style="opacity:1.0;fill:#FFFFFF;stroke:none" width="72.0" height="58.0" x="0.0" y="0.0"> </rect>
+<ellipse cx="15.3" cy="43.6" rx="8.1" ry="8.1" class="atom-6" style="fill:#FFFFFF;fill-rule:evenodd;stroke:#FFFFFF;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path class="bond-0 atom-0 atom-1" d="M 31.6,15.3 L 47.9,5.9" style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path class="bond-0 atom-0 atom-1" d="M 33.5,16.4 L 47.9,8.1" style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path class="bond-1 atom-1 atom-2" d="M 47.9,5.9 L 64.2,15.3" style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path class="bond-2 atom-2 atom-3" d="M 64.2,15.3 L 64.2,34.2" style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path class="bond-2 atom-2 atom-3" d="M 62.3,16.4 L 62.3,33.1" style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path class="bond-3 atom-3 atom-4" d="M 64.2,34.2 L 47.9,43.6" style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path class="bond-4 atom-4 atom-5" d="M 47.9,43.6 L 31.6,34.2" style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path class="bond-4 atom-4 atom-5" d="M 47.9,41.4 L 33.5,33.1" style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path class="bond-5 atom-5 atom-6" d="M 31.6,34.2 L 15.3,43.6" style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path class="bond-6 atom-5 atom-0" d="M 31.6,34.2 L 31.6,15.3" style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path d="M 32.4,14.9 L 31.6,15.3 L 31.6,16.3" style="fill:none;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;" />
+<path d="M 47.1,6.4 L 47.9,5.9 L 48.7,6.4" style="fill:none;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;" />
+<path d="M 63.4,14.9 L 64.2,15.3 L 64.2,16.3" style="fill:none;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;" />
+<path d="M 64.2,33.2 L 64.2,34.2 L 63.4,34.6" style="fill:none;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;" />
+<path d="M 48.7,43.1 L 47.9,43.6 L 47.1,43.1" style="fill:none;stroke:#000000;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;" />
+<ellipse cx="15.3" cy="43.6" rx="8.1" ry="8.1" style="fill:#F7D86B;fill-rule:evenodd;stroke:#F7D86B;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<ellipse cx="15.3" cy="43.6" rx="8.1" ry="8.1" style="fill:none;stroke:#A87700;stroke-width:1.0px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+</svg>

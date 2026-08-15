@@ -134,12 +134,13 @@ Common extension records:
 - `<a>12:<id>[DNA]</a>` — atom-indexed special Markush label with a custom note
 - `<r>0:R[1]</r>` — ring-indexed substituent (regio-uncertain attachment)
 - `<c>9:B</c>` — abstract-ring or superatom placeholder
-- `<d>0:<dum></d>` — explicit dummy attachment point (new SMILES 2.0 form; legacy `<a>0:<dum></a>` is still accepted)
+- `<d>0:<dum></d>` — explicit dummy attachment point (E-SMILES 2.0 form; legacy `<a>0:<dum></a>` is still accepted)
 - `<s>...</s>` — nested substructure record for ring-external repeat fragments
-- `<g>[3:2]:|Sg:n|</g>` — s-group repeat record with one or more inner/outer port pairs
-- `<v>0:A:[0:2]</v>` — virtualArc record; `<r><v>0:R[3]</r>` annotates substituents on that virtualArc
+- `<g>[3:2]:[5:6]:|Sg:n|</g>` — local s-group repeat record with two inner/outer boundary ports
+- `<v>0:A:[0:2]</v>` — virtualArc record; the name may be empty and `<r><v>0:R[3]</r>` annotates a substituent on that virtualArc
 - `|Sg:n|` — structural repeating unit (SRU) marker
 - `?n` — local substructure multiplicity suffixes
+- `<a>2:<id>[blue]</a>` — MolParser endpoint-ball extension; other `<id>[...]` values remain text labels
 
 Full specification: [skills/molparser-extended-smiles/extended-smiles-spec.md](skills/molparser-extended-smiles/extended-smiles-spec.md)
 
@@ -195,7 +196,7 @@ print(result)
 
 Ring-indexed Markush records expand regio-uncertain attachments into a SMILES list. Multiplicity suffixes such as `?3`, `?1-3`, and `?n` encode local substructure replication over possible ring sites; `?n` reads the replication count from the definition dictionary.
 
-Nested `<s>...</s>` substructure records are substituted recursively and returned as preserved E-SMILES annotations; they are not attached back into the main molecule and do not change the existing `?` copy behavior.
+Single-level `<s>...</s>` substructure records have their internal labels substituted and are returned as preserved E-SMILES annotations; they are not attached back into the main molecule and do not change the existing `?` copy behavior. Nesting another `<s>` inside an `<s>` is intentionally rejected. Symbolic SRU counts in `<s>`, `<g>`, or a top-level `|Sg:...|` can be resolved from the same dictionary when the value is one positive integer. For `<g>`, only the count annotation changes—the molecular graph is not expanded.
 
 ```python
 result = mutils.substitute_markush(
@@ -207,11 +208,19 @@ print(result)
 # ['Cc1cc(C)cc(C)c1', 'Cc1ccc(C)c(C)c1', 'Cc1ccc(C)cc1', 'Cc1cccc(C)c1', 'Cc1cccc(C)c1C', 'Cc1ccccc1', 'Cc1ccccc1C']
 ```
 
+```python
+local_repeat = mutils.Translator.substitute_markush(
+    "C<sep><s>*C<sep><a>0:R[1]</a>|Sg:n|</s>",
+    {"R1": "Me", "n": 3},
+)
+# C<sep><s>CC<sep>|Sg:3|</s>
+```
+
 
 
 ### Render E-SMILES
 
-Render the E-SMILES as SVG and save it locally:
+Render E-SMILES as SVG or PNG. Existing SMILES/E-SMILES 1.0 captions retain the original drawing defaults; SRU brackets, local `<g>` brackets, skeletal single-CH2 repeats, empty-name/multiple virtual arcs, and approved endpoint balls are enabled only when their syntax is present.
 
 ```python
 from pathlib import Path
@@ -221,6 +230,9 @@ svg_text = mutils.draw("*C(O)c1cc(C(=O)N(*)*)cc(-c2*ccc*2)c1<sep><a>0:CF3</a><a>
 
 svg_path = Path("molecule.svg")
 svg_path.write_text(svg_text, encoding="utf-8")
+
+png_bytes = mutils.draw("CCO", output_format="png")
+Path("ethanol.png").write_bytes(png_bytes)
 ```
 
 `molecule.svg` is a local render artifact.
@@ -240,11 +252,20 @@ Rendered example:
 
 **Updates**
 
-`draw` also supports virtual ring-closure connections encoded with `<v>...</v>` and `<r><v>...</r>`.
+`draw` also supports virtual ring-closure connections encoded with `<v>...</v>` and `<r><v>...</r>`. New data should encode every closure as `[small_atom_id:large_atom_id]`; reversed legacy pairs remain readable.
 
 E-SMILES: `C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>`
 
 ![VirtualArc rendering](skills/molparser-extended-smiles/assets/images/virtual_arc_with_r3.svg)
+
+For batches, `draw_many` validates one shared configuration and preserves input order:
+
+```python
+svgs = mutils.draw_many(
+    ["CCO", "CCN", "CC*CC<sep><a>2:CH2?3</a>"],
+    output_format="svg",
+)
+```
 
 ## LLM / OCSR workflow
 

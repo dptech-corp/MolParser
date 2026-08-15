@@ -1,0 +1,35 @@
+{
+  "cases": {
+    "abstract_ring": {
+      "bytes": 13787,
+      "caption": "*C(NC(*)(*)C(*)(*)*)C(=O)N(*)*<sep><a>0:R[1]</a><a>4:R[3]</a><a>5:R[2]</a><a>7:R[5]</a><a>8:R[4]</a><c>9:B</c><a>13:R[7]</a><a>14:R[6]</a>",
+      "sha256": "0fc6101c91b05d945dd59f9c10bf2bc5ee5f2f5b66ec05b83d36946701653072"
+    },
+    "atom_r": {
+      "bytes": 4091,
+      "caption": "*c1ccccc1<sep><a>0:R[1]</a>",
+      "sha256": "9551b202d530423148108158a1f6aa14092e78103e3c32d2915850047461cc92"
+    },
+    "dummy": {
+      "bytes": 3793,
+      "caption": "*C(O)=O<sep><d>0:<dum></d>",
+      "sha256": "0516d7d5f6004a1cd61b2828858943e7744cf30295ae28ac6ec8d8d45919f5b5"
+    },
+    "old_named_arc": {
+      "bytes": 8417,
+      "caption": "C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>",
+      "sha256": "60e60fdf4c6b78dd9340edbd61937de8a14a3dd4ff103ca98deb0cc7d69a73aa"
+    },
+    "ordinary": {
+      "bytes": 6333,
+      "caption": "CCOC(=O)c1ccccc1",
+      "sha256": "f47245265e150deee67cf8574db4335b48b50ec685efd32a774866db4fa96532"
+    },
+    "ring_r": {
+      "bytes": 4891,
+      "caption": "C1C=CC=CC=1<sep><r>0:R[1]</r><r>0:R[2]</r>",
+      "sha256": "99b03020070624733823cb19759412124993c1453d97fd082465a67ba4ff749f"
+    }
+  },
+  "rdkit": "2025.09.6"
+}

@@ -137,7 +137,7 @@ c1(*)c(C)cc(N2C(=O)C3C(C(C)=CC(C4C(=O)N(*)C(=O)C4)C3)C2=O)c(C)c1<sep><d>1:<dum><
 
 ### Example 13: VirtualArc
 
-Use `<v>[VIRTUALARC_INDEX]:[VIRTUALARC_NAME]:[FROM_ATOM:TO_ATOM]</v>` to preserve a special abstract ring. The endpoint order is not directional. Use `<r><v>[VIRTUALARC_INDEX]:[GROUP_LABEL]</r>` for a group attached to the virtualArc.
+Use `<v>[VIRTUALARC_INDEX]:[VIRTUALARC_NAME]:[FROM_ATOM:TO_ATOM]</v>` to preserve a special abstract ring. The connection is not directional, so readers may accept either endpoint order; new datasets should emit `FROM_ATOM < TO_ATOM`. Use `<r><v>[VIRTUALARC_INDEX]:[GROUP_LABEL]</r>` for a group attached to the virtualArc.
 
 ```text
 C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
@@ -154,3 +154,12 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><g>[3:2]:[4:5]:|Sg:20|</g>
 ## Unsupported Or Ambiguous Source Features
 
 If a source depiction contains coordination semantics, electron-transfer arrows, uncertain bond style, or uncertain chirality, do not force it into a new token. Output the best encodable E-SMILES backbone and list the unsupported feature separately.
+
+## Audited Synthetic Compatibility Set
+
+For a compact set covering Whole SRU, one-atom and multi-atom local repeats,
+round and square bracket rendering, all four virtualArc appearances, and fixed
+colored endpoint balls, read
+[`references/synthetic-examples.md`](references/synthetic-examples.md). The
+machine-readable ten-record selection and source hashes are in
+[`references/synthetic-examples.json`](references/synthetic-examples.json).
