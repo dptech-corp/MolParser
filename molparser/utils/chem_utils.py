@@ -6,7 +6,7 @@ import ast
 import csv
 import re
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 from rdkit import Chem
 
@@ -51,11 +51,11 @@ def _strip_preserved_records(groups: str) -> str:
     return re.sub(pattern, "", groups, flags=re.DOTALL)
 
 
-def split_groups(groups: str) -> Tuple[Dict[int, Dict[str, str]], Dict[int, str]]:
+def split_groups(groups: str) -> Tuple[Dict[int, Dict[str, str]], Dict[int, List[str]]]:
     pattern = r"<(?P<type>r|a|d)>(?P<content>.*?)</(?P=type)>"
     matches = re.finditer(pattern, _strip_preserved_records(groups))
     a_groups: Dict[int, Dict[str, str]] = {}
-    r_groups: Dict[int, str] = {}
+    r_groups: Dict[int, List[str]] = {}
 
     for m in matches:
         type_ = m.group("type")
@@ -67,7 +67,7 @@ def split_groups(groups: str) -> Tuple[Dict[int, Dict[str, str]], Dict[int, str]
         if not ind.isdigit():
             continue
         if type_ == "r":
-            r_groups[int(ind)] = content
+            r_groups.setdefault(int(ind), []).append(content)
         else:
             a_groups[int(ind)] = {"content": content, "type": type_}
     return a_groups, r_groups
@@ -80,7 +80,9 @@ def get_groups_str(a_groups: Dict[int, Dict], r_groups: Dict[int, Dict] | None =
         groups_str += f"<{tag}>{k}:{v['content']}</{tag}>"
     if r_groups is not None:
         for k, v in sorted(r_groups.items(), key=lambda x: x[0]):
-            groups_str += f"<r>{k}:{v['content']}</r>"
+            contents = v["content"] if isinstance(v["content"], list) else [v["content"]]
+            for content in contents:
+                groups_str += f"<r>{k}:{content}</r>"
     return groups_str
 
 
@@ -196,10 +198,14 @@ def remap_groups(mol: Chem.rdchem.Mol, groups: str, ring_info: tuple) -> str:
                     best_match = new_idx
             ring_map[orig_idx] = best_match if best_overlap > 0 else None
 
-        for old_ind, group in old_ind2rgroup.items():
+        for old_ind, group_list in old_ind2rgroup.items():
             new_ring_idx = ring_map.get(old_ind)
-            if new_ring_idx is not None:
-                new_ind2rgroup[new_ring_idx] = {"content": group, "type": "r"}
+            if new_ring_idx is None:
+                continue
+            entry = new_ind2rgroup.setdefault(
+                new_ring_idx, {"content": [], "type": "r"}
+            )
+            entry["content"].extend(group_list)
 
     return get_groups_str(new_ind2agroup, new_ind2rgroup) + _preserved_records(groups)
 
