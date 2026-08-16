@@ -8,7 +8,7 @@ import random
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field
 from rdkit import Chem, RDLogger
@@ -36,7 +36,7 @@ except ImportError:  # Support running from the package directory as working dir
     )
 
 
-__all__ = ["DrawingConfig", "draw", "draw_many"]
+__all__ = ["DrawingConfig", "draw"]
 
 
 logger = logging.getLogger(__name__)
@@ -2280,73 +2280,3 @@ def draw(
             raise RuntimeError("SVG renderer returned non-text output")
         return svg_to_png(bytestring=drawing.encode("utf-8"))
     return drawing
-
-
-def draw_many(
-    captions: Iterable[str],
-    config: Optional[Union[Dict[str, Any], DrawingConfig]] = None,
-    output_format: Literal["svg", "png"] = "svg",
-    workers: int = 1,
-) -> List[Union[str, bytes]]:
-    """Draw captions in order while validating config once per process.
-
-    ``workers=1`` is the compatibility default.  On POSIX, larger batches can
-    opt into a process pool by passing ``workers > 1``; separate processes are
-    materially faster than RDKit drawing threads and avoid shared native draw
-    state.  As with Python's other multiprocessing APIs, Windows callers using
-    multiple workers should invoke this function from a guarded entry point.
-    """
-
-    if isinstance(captions, str):
-        raise TypeError("captions must be an iterable of strings, not one string")
-    if workers < 1:
-        raise ValueError("workers must be at least 1")
-    items = list(captions)
-    drawing_config = (
-        config if isinstance(config, DrawingConfig) else _validate_config(config)
-    )
-    if workers == 1 or len(items) < 2:
-        return [
-            draw(item, config=drawing_config, output_format=output_format)
-            for item in items
-        ]
-
-    from concurrent.futures import ProcessPoolExecutor
-
-    # Build one validated config in each process instead of serialising a
-    # Pydantic object with every caption.  A modest chunksize amortises IPC for
-    # the large synthetic-data batches this helper is intended for.
-    chunksize = min(64, max(1, len(items) // (workers * 8)))
-    with ProcessPoolExecutor(
-        max_workers=workers,
-        initializer=_draw_many_worker_init,
-        initargs=(drawing_config.model_dump(), output_format),
-    ) as executor:
-        return list(executor.map(_draw_many_worker, items, chunksize=chunksize))
-
-
-_DRAW_MANY_WORKER_CONFIG: Optional[DrawingConfig] = None
-_DRAW_MANY_WORKER_OUTPUT_FORMAT: Literal["svg", "png"] = "svg"
-
-
-def _draw_many_worker_init(
-    config: Dict[str, Any],
-    output_format: Literal["svg", "png"],
-) -> None:
-    """Initialise one private RDKit drawing process."""
-
-    global _DRAW_MANY_WORKER_CONFIG, _DRAW_MANY_WORKER_OUTPUT_FORMAT
-    _DRAW_MANY_WORKER_CONFIG = _validate_config(config)
-    _DRAW_MANY_WORKER_OUTPUT_FORMAT = output_format
-
-
-def _draw_many_worker(smi: str) -> Union[str, bytes]:
-    """Process-pool entry point; kept at module scope for spawn compatibility."""
-
-    if _DRAW_MANY_WORKER_CONFIG is None:
-        raise RuntimeError("draw_many worker was not initialised")
-    return draw(
-        smi,
-        config=_DRAW_MANY_WORKER_CONFIG,
-        output_format=_DRAW_MANY_WORKER_OUTPUT_FORMAT,
-    )

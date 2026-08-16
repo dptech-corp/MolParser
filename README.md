@@ -291,15 +291,6 @@ C[C@@H](O)[C@H]1N*(=O)[C@@H](CCCCN)NC(=O)CNC(=O)CNC(=O)[C@H](CC(N)=O)NC(=O)[C@H]
 
 The same cases and their encoding notes are collected in [`synthetic-examples.md`](skills/molparser-extended-smiles/references/synthetic-examples.md).
 
-For batches, `draw_many` validates one shared configuration and preserves input order:
-
-```python
-svgs = mutils.draw_many(
-    ["CCO", "CCN", "CC*CC<sep><a>2:CH2?3</a>"],
-    output_format="svg",
-)
-```
-
 ## LLM / OCSR workflow
 
 ### Skill context

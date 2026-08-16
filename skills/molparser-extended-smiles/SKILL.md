@@ -87,9 +87,6 @@ from molparser import utils as mutils
 
 svg_text = mutils.draw(result["esmi"], output_format="svg")
 png_bytes = mutils.draw(result["esmi"], output_format="png")
-
-# For large independent batches on Linux, workers > 1 uses a process pool.
-svg_batch = mutils.draw_many(raw_esmiles_batch, output_format="svg", workers=4)
 ```
 
 The drawer displays atom substituents, dummy attachment points, abstract rings, and ring-level annotations from the E-SMILES extension.

@@ -145,7 +145,7 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><g>[3:2]:[4:5]:|Sg:20|</g>
 - Resolved substituents are folded into the base `smi`; unresolved Markush or ring-level annotations remain in `groups`.
 - Pre-compatible `<s>` records are preserved in `groups`; `substitute_markush` can substitute labels inside one single-level substructure record and return the result as an E-SMILES annotation, without attaching or expanding it into the main molecule. An `<s>` nested inside another `<s>` is outside the supported grammar and is rejected.
 - Pre-compatible `<g>`, `<v>`, and `<r><v>...` records are preserved in `groups` and are not chemically expanded or remapped by substitution. A symbolic `<g>` count can resolve to one positive integer without physical expansion. Use the gates in `references/synthetic-examples.md` before publishing snapshot assets.
-- `draw` renders SMILES or E-SMILES to SVG/PNG for visual QA, including SRU and local-repeat brackets, virtual arcs, and approved MolParser endpoint-ball labels. `draw_many` provides ordered process-parallel rendering for large independent batches.
+- `draw` renders SMILES or E-SMILES to SVG/PNG for visual QA, including SRU and local-repeat brackets, virtual arcs, and approved MolParser endpoint-ball labels.
 
 ## 6. Unsupported Chemistry
 
