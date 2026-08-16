@@ -137,7 +137,7 @@ SMILES<sep>EXTENSION
 Common extension records:
 
 - `<a>0:R[1]</a>` — atom-indexed substituent or Markush placeholder
-- `<a>12:<id>[DNA]</a>` — atom-indexed special Markush label with a custom note
+- `<a>12:<id>[DNA]</a>` — atom-indexed special Markush label; non-ball notes render as group text
 - `<r>0:R[1]</r>` — ring-indexed substituent (regio-uncertain attachment)
 - `<c>9:B</c>` — abstract-ring or superatom placeholder
 - `<d>0:<dum></d>` — explicit dummy attachment point (E-SMILES 2.0 form; legacy `<a>0:<dum></a>` in E-SMILES 1.0 is still accepted)
@@ -146,7 +146,6 @@ Common extension records:
 - `<v>0:A:[0:2]</v>` — virtualArc record
 - `|Sg:n|` — structural repeating unit (SRU) marker
 - `?n` — local substructure multiplicity suffixes
-- `<id>` — Special markush, such as colored circle, `<id>[...]` values remain text labels
 
 Full specification: [skills/molparser-extended-smiles/extended-smiles-spec.md](skills/molparser-extended-smiles/extended-smiles-spec.md)
 
@@ -261,7 +260,11 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 
 #### Fixed-color endpoint balls
 
-Use the approved `blue` and `green` `<id>` labels when the source contains fixed-color endpoint balls. These labels are MolParser drawing extensions rather than chemical identities.
+This is the endpoint-ball rendering of the same atom-indexed `<id>[NOTE]`
+syntax used for text labels such as `<id>[DNA]`. Because these records point to
+`*`, approved values such as `blue` and `green` render as balls; other notes
+render as group text. These values are MolParser drawing extensions rather
+than chemical identities.
 
 ```text
 *CC(=O)Nc1c(C#N)c(*)nn1C*<sep><a>0:<id>[blue]</a><a>10:<id>[green]</a><a>14:<id>[green]</a>

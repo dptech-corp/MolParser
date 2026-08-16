@@ -13,7 +13,7 @@ Use this skill when reading, writing, validating, normalizing, or rendering MolP
 2. Emit `SMILES<sep>EXTENSION`; keep `<sep>` even when `EXTENSION` is empty.
 3. Add extension records only when the base SMILES cannot carry the annotation:
    - `<a>[ATOM_INDEX]:[GROUP_LABEL]</a>`: atom-indexed substituent or abbreviation.
-   - `<a>[ATOM_INDEX]:<id>[NOTE]</a>`: special Markush label with a custom note such as `DNA`, `RNA`, `protein`, `red`, or `ball`.
+   - `<a>[ATOM_INDEX]:<id>[NOTE]</a>`: atom-indexed special Markush label. The drawer shows `NOTE` as group text unless the indexed atom is `*` and `NOTE` is an approved endpoint-ball token.
    - `<r>[RING_INDEX]:[GROUP_LABEL]</r>`: ring-indexed substituent with unspecified attachment atom.
    - `<c>[ATOM_INDEX]:[RING_LABEL]</c>`: abstract-ring or superatom placeholder at a dummy atom.
    - `<d>[ATOM_INDEX]:<dum></d>`: explicit dummy attachment point. This is the E-SMILES 2.0 form; legacy `<a>[ATOM_INDEX]:<dum></a>` is still accepted.
@@ -75,6 +75,9 @@ result = mutils.substitute_markush(
 - Multiplicity suffixes `?3`, `?1-3`, and `?n` encode local substructure
   replication; `?n` reads the replication count from the definition dictionary, e.g.
   `<a>2:CH2?n</a>` with `{"n": 10}`.
+- Treat `<id>[NOTE]` as a preserved special label, not as a definition key.
+  `substitute_markush` may resolve other labels in the same branch while keeping
+  the `<id>` record in residual E-SMILES.
 - Labels inside a single-level pre-compatible `<s>` record are substituted by `substitute_markush`, and the record is returned as a preserved E-SMILES annotation, e.g. `<s>**<sep><a>0:L[3]</a><a>1:R[3]</a>|Sg:n|</s>` can become `<s>ClBr<sep>|Sg:n|</s>`. An `<s>` nested inside another `<s>` is rejected. This does not change the existing `?n` copy behavior.
 - With the default `repeat_policy="best_effort"`, physically expand Whole-SRU and two-port `<g>` repeats only when their boundary bonds and scope are unambiguous. Preserve under-specified `<s>`, `<g>`, `<v>`, and `<r><v>...` portions as E-SMILES, while substituting independent resolvable labels and remapping retained outer-graph indices. Use `strict` to reject residual repeats and `preserve` for annotation-only repeat handling.
 - For the PEG-like example `*OCCO*<sep><d>0:<dum></d><d>5:<dum></d><g>[1:0]:[3:4]:|Sg:12|</g>`, pass `terminal_policy="hydrogen"`; the result is `"O" + "CCO" * 12` (C24H50O13), a plain RDKit-parseable SMILES.
@@ -90,7 +93,14 @@ svg_text = mutils.draw(result["esmi"], output_format="svg")
 png_bytes = mutils.draw(result["esmi"], output_format="png")
 ```
 
-The drawer displays atom substituents, dummy attachment points, abstract rings, and ring-level annotations from the E-SMILES extension.
+The drawer displays atom substituents, dummy attachment points, abstract rings,
+and ring-level annotations from the E-SMILES extension. For atom-indexed
+`<id>[NOTE]`, it draws `NOTE` as group text by default. It draws an endpoint
+ball only when the indexed base atom is `*` and `NOTE` is one of `ball`,
+`grey`, `black`, `green`, `blue`, `yellow`, `purple`, `orange`, `pink`, or
+`brown`. Matching is exact and case-sensitive. Setting
+`features.endpoint_balls=False` disables the ball treatment and keeps the text
+label.
 
 For representative fixed-color endpoint balls, Whole SRU, local `<g>` repeats,
 and a large stereochemical atom-Markush structure, read
@@ -106,7 +116,7 @@ Markush expansion.
 - `<v>` indexes virtualArc annotations in a separate namespace; `<r><v>0:R[3]</r>` attaches an unresolved group to virtualArc `0`.
 - A virtualArc name may be empty. For new datasets, emit canonical endpoint pairs with `start < end`, sort multiple pairs lexicographically, assign consecutive ids, and rebind `<r><v>` references; continue accepting legacy reversed endpoints when reading.
 - `<g>` port pairs use `[INNER_PORT:OUTER_PORT]`; repeat count defaults to `n` and may be explicit, e.g. `|Sg:20|`.
-- `GROUP_LABEL` may be a common abbreviation (`Me`, `OMe`, `CF3`), a Markush label (`R[1]`), or a special Markush label `<id>[NOTE]`. For dummy attachment points, prefer `<d>[ATOM_INDEX]:<dum></d>` and accept legacy `<a>[ATOM_INDEX]:<dum></a>`.
+- `GROUP_LABEL` may be a common abbreviation (`Me`, `OMe`, `CF3`) or a Markush label (`R[1]`). Use `<id>[NOTE]` only as an atom-indexed `<a>` payload, with a non-empty, whitespace-free `NOTE` that contains no `]` and has no multiplicity suffix. Endpoint-ball rendering on `*` is only a visual treatment of approved `<id>` values; it is not a separate token or chemical identity. For dummy attachment points, prefer `<d>[ATOM_INDEX]:<dum></d>` and accept legacy `<a>[ATOM_INDEX]:<dum></a>`.
 - Use local substructure multiplicity suffixes (`?n`, `?1-3`, `?3`) separately from SRU-level `|Sg:n|`.
 - After canonicalization or abbreviation substitution, remap supported retained `<g>`, `<v>`, and atom/ring annotations. If a resolved substitution removes an endpoint needed by a retained annotation, best-effort mode rolls that branch back instead of emitting a silently corrupted record.
 

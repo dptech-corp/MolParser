@@ -1574,10 +1574,12 @@ class _DrawingTranslator:
                             )
                         else:
                             label = _format_group_label(desc)
+                elif desc.symbol == Tokens.special_id:
+                    # A non-ball special id is an opaque graphical group label,
+                    # independent of the underlying atom element.
+                    label = _format_group_label(desc)
                 elif atom.GetSymbol() in ("C", "O"):
-                    if desc.symbol == Tokens.special_id:
-                        label = _format_group_label(desc)
-                    elif desc.symbol is None and desc.multiple is not None:
+                    if desc.symbol is None and desc.multiple is not None:
                         label = f"({atom.GetSymbol()})<sub>{desc.multiple}</sub>"
                 if label is not None:
                     atom.SetProp("_displayLabel", label)

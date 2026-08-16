@@ -7,6 +7,8 @@ Use this guide after `extended-smiles-spec.md` when a visual example is needed. 
 1. Output `SMILES<sep>EXTENSION`. If there is no extension, output `SMILES<sep>`.
 2. Use zero-based indexes from the selected base SMILES.
 3. Use `<a>` for atom-indexed substituents, abbreviations, and Markush groups.
+   Encode a special label as `<id>[NOTE]`: draw `NOTE` as text unless the
+   indexed atom is `*` and `NOTE` is an approved endpoint-ball token.
 4. Use `<d>` for explicit dummy attachment points. Continue accepting legacy `<a>[ATOM_INDEX]:<dum></a>` input.
 5. Use `<r>` when a substituent belongs to a ring but its exact attachment atom is unspecified.
 6. Use `<c>` for an abstract-ring or superatom label carried by a dummy atom.
@@ -49,9 +51,11 @@ Use `<d>[ATOM_INDEX]:<dum></d>` to retain an explicit connection point in E-SMIL
 
 ![Dummy attachment point rendering](assets/images/03-connection-point.png)
 
-### 4. Dataset-specific Markush label
+### 4. Special Markush label rendered as text
 
-Use `<id>[NOTE]` for a graphical or dataset label that cannot be reduced to a standard substituent abbreviation, such as DNA, RNA, protein, or a color cue.
+Use `<id>[NOTE]` for a graphical or dataset label that cannot be reduced to a
+standard substituent abbreviation. Here `DNA` is drawn directly as group text.
+The label is preserved rather than treated as a definition key.
 
 ```text
 N(C(=O)C(*)NC1N=C(N(*)*)N=C(N(*)*C(=O)N(*)*)N=1)*<sep><a>4:R[1]</a><a>10:R[6]</a><a>11:R[7]</a><a>15:R[2]</a><a>16:R[3]</a><a>20:R[4]</a><a>21:R[5]</a><a>23:<id>[DNA]</a>
@@ -159,9 +163,13 @@ CC(=O)NCOCCC1CC1<sep><g>[5:4]:[6:7]:|Sg:n|</g>
 
 ![Local s-group repeat rendering](assets/images/sgroup-local-ether-repeat-n.svg)
 
-### 15. Fixed-color endpoint balls
+### 15. Special Markush label rendered as an endpoint ball
 
-Use approved `<id>[blue]` and `<id>[green]` atom labels when the source depicts fixed-color endpoint balls. These values are MolParser drawing extensions, not chemical identities.
+This uses the same atom-indexed `<id>[NOTE]` grammar as Example 4. Here each
+record points to `*`, so approved values such as `blue` and `green` select
+endpoint-ball rendering. An unapproved or differently cased value falls back
+to the text-label behavior shown in Example 4. The color value is a MolParser
+drawing extension, not a chemical identity.
 
 ```text
 *CC(=O)Nc1c(C#N)c(*)nn1C*<sep><a>0:<id>[blue]</a><a>10:<id>[green]</a><a>14:<id>[green]</a>

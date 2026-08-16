@@ -3,6 +3,7 @@
 
 Supported extension records:
   - <a>[ATOM_INDEX]:[GROUP_NAME]</a>
+  - <a>[ATOM_INDEX]:<id>[NOTE]</a>
   - <d>[ATOM_INDEX]:<dum></d>
   - <r>[RING_INDEX]:[GROUP_NAME]</r>
   - <r><v>[VIRTUALARC_INDEX]:[GROUP_NAME]</r>
@@ -147,7 +148,13 @@ def _validate_record(
     if tag == "a" and value == "<dum>":
         return None
 
-    if value.startswith("<id>"):
+    if "<id>" in value:
+        if tag != "a" or namespace != "atom":
+            add(
+                messages,
+                "error",
+                "<id>[NOTE] is supported only as an atom-indexed <a> payload",
+            )
         if not SPECIAL_ID_RE.match(value):
             add(messages, "error", f"<id> special Markush label should use <id>[NOTE], got: {value!r}")
         return record_info
@@ -252,6 +259,12 @@ def _validate_virtual_arc(
     if not match:
         add(messages, "error", f"<v> should use [INDEX]:[NAME]:[FROM_ATOM:TO_ATOM], got: {body!r}")
         return None
+    if "<id>" in match.group("name"):
+        add(
+            messages,
+            "error",
+            "<id>[NOTE] is supported only as an atom-indexed <a> payload, not as a virtualArc name",
+        )
     start = int(match.group("from"))
     end = int(match.group("to"))
     if start == end:

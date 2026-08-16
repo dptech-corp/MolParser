@@ -24,7 +24,9 @@ For ordinary molecules, use `SMILES<sep>`.
 
 - `ATOM_INDEX`: zero-based atom index in the base SMILES.
 - `GROUP_LABEL`: substituent, abbreviation, or Markush placeholder. Legacy inputs may also use `<dum>` here for dummy attachment points.
-- Special Markush labels use `<id>[NOTE]`, where `NOTE` is a custom remark such as `DNA`, `RNA`, `protein`, `red`, or `ball`.
+- Atom-indexed special Markush labels use `<id>[NOTE]`, where `NOTE` is a
+  non-empty, whitespace-free custom remark. Use this payload only inside
+  `<a>...</a>`; see Section 4 for substitution and drawing behavior.
 
 Example:
 
@@ -136,13 +138,27 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><g>[3:2]:[4:5]:|Sg:20|</g>
 
 - Common abbreviations: `Me`, `OMe`, `Ph`, `CF3`.
 - Markush placeholders: `R[1]`, `R[2]`, `X[1]`.
-- Special Markush labels: `<id>[DNA]`, `<id>[RNA]`, `<id>[protein]`, or other task-specific notes. Fixed-color endpoint-ball labels such as `<id>[blue]` are a MolParser project extension used in E-SMILES 2.0 workflows, not a general chemical identity token.
+- Atom-indexed special Markush labels use one grammar:
+  `<a>[ATOM_INDEX]:<id>[NOTE]</a>`. Do not use `<id>` as the payload of `<d>`,
+  `<r>`, `<c>`, or `<r><v>`. The note is opaque payload text rather than a
+  Markush definition key, so `substitute_markush` preserves it while resolving
+  independent labels where possible.
+- The drawer renders `NOTE` as ordinary group text by default. The approved
+  values `ball`, `grey`, `black`, `green`, `blue`, `yellow`, `purple`,
+  `orange`, `pink`, and `brown` select endpoint-ball rendering only when
+  `ATOM_INDEX` points to `*`. Matching is exact and case-sensitive. Otherwise
+  the value remains group text. Setting `features.endpoint_balls` to `false`
+  also keeps the text form. This is a MolParser visual extension of the same
+  `<id>[NOTE]` token, not a separate E-SMILES grammar or chemical identity.
 - Dataset-specific labels may appear as payload text when they cannot be reduced to a standard abbreviation.
 
 ## 5. Utility Behavior
 
 - `molparser.utils.postprocess_caption` / `Translator.refactor` canonicalize SMILES and substitute known atom-indexed abbreviations from `molparser/utils/abbrevs_example.csv` when the attachment is chemically valid.
 - Resolved substituents are folded into the base `smi`; unresolved Markush or ring-level annotations remain in `groups`.
+- Atom-indexed `<id>[NOTE]` records remain in `groups`; they are not looked up
+  in the Markush definition dictionary. Non-ball notes render as text, while
+  only approved values on `*` in Section 4 render as endpoint balls.
 - Pre-compatible `<s>` records are preserved in `groups`; `substitute_markush` can substitute labels inside one single-level substructure record and return the result as an E-SMILES annotation, without attaching or expanding it into the main molecule. An `<s>` nested inside another `<s>` is outside the supported grammar and is rejected.
 - Pre-compatible `<s>` and under-specified `<g>`, `<v>`, or `<r><v>...` portions remain in `groups`. When other substitutions reorder the outer graph, retained `<g>` ports, `<v>` endpoints, and `<c>` atom indices are remapped; if an endpoint was removed, best-effort mode rolls back that branch instead of emitting a stale index. A symbolic `<g>` count may resolve to one positive integer even when its graph remains residual.
 - `draw` renders SMILES or E-SMILES to SVG/PNG for visual QA, including SRU and local-repeat brackets, virtual arcs, and approved MolParser endpoint-ball labels.
@@ -164,6 +180,10 @@ Preserve the encodable backbone, do not invent tokens, and report unencoded chem
 - balanced `<a>`, `<d>`, `<r>`, `<c>`, `<s>`, `<g>`, and `<v>` tags, allowing inline `<r><v>...</r>`;
 - non-negative indexes in the correct namespace;
 - no whitespace inside group labels;
+- special labels use exactly `<a>[ATOM_INDEX]:<id>[NOTE]</a>` with a non-empty,
+  whitespace-free `NOTE` that contains no `]` and has no `?` multiplicity
+  suffix; endpoint-ball values use the same syntax as text labels and render as
+  balls only when the indexed base atom is `*` and ball rendering is enabled;
 - local substructure multiplicity uses `?n`, `?1-3`, or `?3`;
 - SRU repetition uses `|Sg:n|` or an explicit count such as `|Sg:20|`;
 - supported retained `<g>`, `<v>`, and atom/ring indexes are remapped after canonicalization or substitution; if an endpoint is removed and cannot be remapped, best-effort mode preserves the original branch instead of silently changing the annotated scope.
