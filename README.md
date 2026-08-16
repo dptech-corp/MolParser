@@ -231,80 +231,75 @@ assert peg12 == "O" + "CCO" * 12
 
 Render E-SMILES as SVG or PNG. Existing SMILES/E-SMILES 1.0 captions retain the original drawing defaults; SRU brackets, local `<g>` brackets, skeletal single-CH2 repeats, empty-name/multiple virtual arcs, and approved endpoint balls are enabled only when their syntax is present.
 
+#### Baseline rendering
+
+Call the standard `draw` function with the raw E-SMILES. Use `output_format="svg"` for editable vector output or `"png"` for raster output.
+
 ```python
 from pathlib import Path
 from molparser import utils as mutils
 
-svg_text = mutils.draw("*C(O)c1cc(C(=O)N(*)*)cc(-c2*ccc*2)c1<sep><a>0:CF3</a><a>9:R[3]</a><a>10:R[2]</a><a>14:X</a><a>18:Y</a><r>1:R[1]?1-3</r>", output_format="svg")
+raw = "*C(O)c1cc(C(=O)N(*)*)cc(-c2*ccc*2)c1<sep><a>0:CF3</a><a>9:R[3]</a><a>10:R[2]</a><a>14:X</a><a>18:Y</a><r>1:R[1]?1-3</r>"
+svg_text = mutils.draw(raw, output_format="svg")
+png_bytes = mutils.draw(raw, output_format="png")
 
-svg_path = Path("molecule.svg")
-svg_path.write_text(svg_text, encoding="utf-8")
+Path("molecule.svg").write_text(svg_text, encoding="utf-8")
+Path("molecule.png").write_bytes(png_bytes)
 ```
 
-`molecule.svg` is a local render artifact.
+![Baseline E-SMILES rendering](skills/molparser-extended-smiles/assets/images/readme_molecule.svg)
 
-To obtain a PNG from that SVG (requires `cairosvg` from `requirements.txt`):
+#### VirtualArc with an attached group
 
-```python
-import cairosvg
+Use `<v>` for the virtual ring closure and `<r><v>...</r>` for its attached group. Emit new endpoint pairs as `[small_atom_id:large_atom_id]`; reversed legacy pairs remain readable.
 
-png_path = Path("molecule.png")
-cairosvg.svg2png(url=str(svg_path), write_to=str(png_path))
+```text
+C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 ```
 
-Rendered example:
+![VirtualArc rendering](skills/molparser-extended-smiles/assets/images/virtual_arc_with_r3.svg)
 
-Rendered E-SMILES example
+#### Fixed-color endpoint balls
 
-**Updates**
-
-`draw` also supports virtual ring-closure connections encoded with `<v>...</v>` and `<r><v>...</r>`. New data should encode every closure as `[small_atom_id:large_atom_id]`; reversed legacy pairs remain readable.
-
-E-SMILES: `C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>`
-
-VirtualArc rendering
-
-Representative cases below are drawn from the raw E-SMILES so repeat and endpoint annotations remain visible.
-
-Colored endpoint balls (MolParser extension)
+Use the approved `blue` and `green` `<id>` labels when the source contains fixed-color endpoint balls. These labels are MolParser drawing extensions rather than chemical identities.
 
 ```text
 *CC(=O)Nc1c(C#N)c(*)nn1C*<sep><a>0:<id>[blue]</a><a>10:<id>[green]</a><a>14:<id>[green]</a>
 ```
 
-Blue and green endpoint balls
+![Fixed-color endpoint balls rendering](skills/molparser-extended-smiles/assets/images/endpoint-balls-blue-green-green.svg)
 
+#### Whole SRU with explicit dummy records
 
-
-Whole SRU with explicit E-SMILES 2.0 dummy records
+Use two E-SMILES 2.0 `<d>` records and a top-level `|Sg:n|`. Draw the raw E-SMILES to retain the brackets and count.
 
 ```text
 *OCCOC(=O)c1ccc(C(*)=O)cc1<sep><d>0:<dum></d><d>12:<dum></d>|Sg:n|
 ```
 
-Whole SRU rendering
+![Whole SRU rendering](skills/molparser-extended-smiles/assets/images/whole-sru-aromatic-ester-n.svg)
 
+#### Local s-group repeat
 
-
-Local s-group repeat
+Use `[INNER_PORT:OUTER_PORT]` pairs to delimit the repeated local subgraph. Draw the raw record when the parentheses and symbolic count must remain visible.
 
 ```text
 CC(=O)NCOCCC1CC1<sep><g>[5:4]:[6:7]:|Sg:n|</g>
 ```
 
-Local s-group repeat rendering
+![Local s-group repeat rendering](skills/molparser-extended-smiles/assets/images/sgroup-local-ether-repeat-n.svg)
 
+#### Large stereochemical atom-Markush structure
 
-
-Macrocyclic peptide with an atom-indexed Markush X label
+Keep unresolved atom-indexed labels such as `X` while preserving the stereochemical structure and legacy drawing style.
 
 ```text
 C[C@@H](O)[C@H]1N*(=O)[C@@H](CCCCN)NC(=O)CNC(=O)CNC(=O)[C@H](CC(N)=O)NC(=O)[C@H](CCC(=O)O)NC(=O)[C@H](C)N(C)C(=O)[C@@H](Cc2c[nH]c3ccccc23)NC(=O)[C@H](CS)NC(=O)[C@@H](Cc2ccccc2)NC(=O)[C@H](CCCCN)NC(=O)[C@H](CCCNC(=N)N)NC(=O)[C@H](Cc2ccc(O)cc2)NC(=O)[C@H](CCC(N)=O)NC1=O<sep><a>5:X</a>
 ```
 
+![Large stereochemical atom-Markush rendering](skills/molparser-extended-smiles/assets/images/macrocyclic-peptide-markush-x.svg)
 
-
-The same cases and their encoding notes are collected in `[synthetic-examples.md](skills/molparser-extended-smiles/references/synthetic-examples.md)`.
+See the [E-SMILES Figure Guide](skills/molparser-extended-smiles/figure-index.md) for the complete, consistently formatted visual example set.
 
 ## LLM / OCSR workflow
 

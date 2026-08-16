@@ -10,6 +10,6 @@ For this repository, operational guidance has been normalized into English-first
 
 This file is intentionally concise and serves as provenance metadata rather than a full translation extract.
 
-The four representative records in `references/synthetic-examples.md` are
-project-provided documentation examples. They are not presented as a copy of
-the internal source document or of a larger synthetic dataset.
+The representative renderings in `figure-index.md` are project-provided
+documentation examples. They are not presented as a copy of the internal
+source document or of a larger synthetic dataset.

@@ -94,9 +94,9 @@ The drawer displays atom substituents, dummy attachment points, abstract rings, 
 
 For representative fixed-color endpoint balls, Whole SRU, local `<g>` repeats,
 and a large stereochemical atom-Markush structure, read
-[`references/synthetic-examples.md`](references/synthetic-examples.md). Draw each
-raw E-SMILES fixture. Do not call `substitute_markush` first unless the user has
-explicitly requested concrete Markush expansion.
+[`figure-index.md`](figure-index.md). Draw each raw E-SMILES fixture. Do not call
+`substitute_markush` first unless the user has explicitly requested concrete
+Markush expansion.
 
 ## Validation Priorities
 
@@ -119,6 +119,5 @@ explicitly requested concrete Markush expansion.
 
 1. `extended-smiles-spec.md`
 2. `figure-index.md`
-3. `references/synthetic-examples.md` when repeat, virtual-arc, or endpoint-ball examples are needed
-4. `validate_esmiles.py`
-5. `source-provenance.md`
+3. `validate_esmiles.py`
+4. `source-provenance.md`
