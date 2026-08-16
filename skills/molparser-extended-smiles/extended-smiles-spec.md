@@ -26,7 +26,7 @@ For ordinary molecules, use `SMILES<sep>`.
 - `GROUP_LABEL`: substituent, abbreviation, or Markush placeholder. Legacy inputs may also use `<dum>` here for dummy attachment points.
 - Atom-indexed special Markush labels use `<id>[NOTE]`, where `NOTE` is a
   non-empty, whitespace-free custom remark. Use this payload only inside
-  `<a>...</a>`; see Section 4 for substitution and drawing behavior.
+  `<a>...</a>`;
 
 Example:
 
@@ -89,11 +89,6 @@ Example:
 ```text
 C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 ```
-
-For newly generated data, normalize every pair to `FROM_ATOM < TO_ATOM`, sort
-multiple pairs lexicographically, and then assign consecutive virtualArc ids
-`0..n-1`. Rebind names, substituents, and `<r><v>` references after sorting.
-Keep legacy reversed endpoints readable for backward compatibility.
 
 ## 3. Multiplicity And Structural Repetition
 

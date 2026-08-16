@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Lightweight validator for MolParser E-SMILES (current project scope).
+"""Lightweight validator for MolParser E-SMILES
 
 Supported extension records:
   - <a>[ATOM_INDEX]:[GROUP_NAME]</a>
