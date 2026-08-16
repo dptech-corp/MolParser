@@ -346,7 +346,11 @@ def _copy_fragment(
     tgt_mol: Chem.rdchem.RWMol,
     src_mol: Chem.rdchem.Mol,
     omitted_idx: int | None,
-) -> dict[int, int]:
+    omitted_replacement_idx: int | None = None,
+) -> tuple[
+    dict[int, int],
+    list[tuple[int, int, tuple[int, int], Chem.rdchem.BondStereo]],
+]:
     idx_map: dict[int, int] = {}
     for atom in src_mol.GetAtoms():
         if atom.GetIdx() == omitted_idx:
@@ -355,13 +359,117 @@ def _copy_fragment(
         new_atom.SetAtomMapNum(0)
         idx_map[atom.GetIdx()] = tgt_mol.AddAtom(new_atom)
 
+    copied_bonds: list[tuple[Chem.rdchem.Bond, Chem.rdchem.Bond]] = []
     for bond in src_mol.GetBonds():
         begin = bond.GetBeginAtomIdx()
         end = bond.GetEndAtomIdx()
         if begin == omitted_idx or end == omitted_idx:
             continue
         tgt_mol.AddBond(idx_map[begin], idx_map[end], bond.GetBondType())
-    return idx_map
+        copied = tgt_mol.GetBondBetweenAtoms(idx_map[begin], idx_map[end])
+        copied.SetBondDir(bond.GetBondDir())
+        copied.SetIsAromatic(bond.GetIsAromatic())
+        copied.SetIsConjugated(bond.GetIsConjugated())
+        copied_bonds.append((bond, copied))
+
+    pending_stereo: list[
+        tuple[int, int, tuple[int, int], Chem.rdchem.BondStereo]
+    ] = []
+    for source_bond, copied_bond in copied_bonds:
+        stereo_atoms = tuple(source_bond.GetStereoAtoms())
+        if stereo_atoms:
+            mapped_stereo: list[int] = []
+            for atom_idx in stereo_atoms:
+                if atom_idx == omitted_idx:
+                    if omitted_replacement_idx is None:
+                        raise _UnexpandableRepeat(
+                            "Cannot preserve double-bond stereo across the attachment"
+                        )
+                    mapped_stereo.append(omitted_replacement_idx)
+                elif atom_idx in idx_map:
+                    mapped_stereo.append(idx_map[atom_idx])
+                else:
+                    raise _UnexpandableRepeat(
+                        "Cannot remap double-bond stereo across the attachment"
+                    )
+            if len(mapped_stereo) != 2:
+                raise _UnexpandableRepeat(
+                    "Double-bond stereo requires two mapped reference atoms"
+                )
+            pending_stereo.append(
+                (
+                    copied_bond.GetBeginAtomIdx(),
+                    copied_bond.GetEndAtomIdx(),
+                    (mapped_stereo[0], mapped_stereo[1]),
+                    source_bond.GetStereo(),
+                )
+            )
+        elif source_bond.GetStereo() != Chem.BondStereo.STEREONONE:
+            copied_bond.SetStereo(source_bond.GetStereo())
+
+    if omitted_idx is not None:
+        for source_atom in src_mol.GetAtoms():
+            neighbors = [neighbor.GetIdx() for neighbor in source_atom.GetNeighbors()]
+            if omitted_idx not in neighbors:
+                continue
+            copied_atom = tgt_mol.GetAtomWithIdx(idx_map[source_atom.GetIdx()])
+            if copied_atom.GetChiralTag() == Chem.ChiralType.CHI_UNSPECIFIED:
+                continue
+            omitted_position = neighbors.index(omitted_idx)
+            if (len(neighbors) - 1 - omitted_position) % 2:
+                copied_atom.InvertChirality()
+    return idx_map, pending_stereo
+
+
+def _restore_stereo_snapshots(
+    mol: Chem.rdchem.RWMol,
+    snapshots: list[tuple[int, int, tuple[int, int], Chem.rdchem.BondStereo]],
+    removed_idx: int | None = None,
+) -> None:
+    """Restore stereo metadata after attachment bonds/atoms have been replaced."""
+    def adjusted(atom_idx: int) -> int:
+        if removed_idx is not None and atom_idx > removed_idx:
+            return atom_idx - 1
+        return atom_idx
+
+    for begin_idx, end_idx, stereo_atoms, stereo in snapshots:
+        bond = mol.GetBondBetweenAtoms(adjusted(begin_idx), adjusted(end_idx))
+        if bond is None:
+            raise _UnexpandableRepeat(
+                "Cannot locate double bond after attachment replacement"
+            )
+        mapped = (adjusted(stereo_atoms[0]), adjusted(stereo_atoms[1]))
+        if mapped[0] == mapped[1]:
+            raise _UnexpandableRepeat(
+                "Cannot preserve double-bond stereo across the attachment"
+            )
+        bond.SetStereoAtoms(mapped[0], mapped[1])
+        bond.SetStereo(stereo)
+
+
+def _target_stereo_snapshots(
+    mol: Chem.rdchem.RWMol,
+    attachment_idx: int,
+) -> list[tuple[int, int, tuple[int, int], Chem.rdchem.BondStereo]]:
+    """Capture alkene stereo before deleting its directional attachment bond."""
+    snapshots: list[tuple[int, int, tuple[int, int], Chem.rdchem.BondStereo]] = []
+    for bond in mol.GetBonds():
+        stereo_atoms = tuple(bond.GetStereoAtoms())
+        if attachment_idx not in stereo_atoms:
+            continue
+        if len(stereo_atoms) != 2:
+            raise _UnexpandableRepeat(
+                "Double-bond stereo requires two reference atoms"
+            )
+        snapshots.append(
+            (
+                bond.GetBeginAtomIdx(),
+                bond.GetEndAtomIdx(),
+                (stereo_atoms[0], stereo_atoms[1]),
+                bond.GetStereo(),
+            )
+        )
+    return snapshots
 
 
 def _attach_fragment(
@@ -377,6 +485,8 @@ def _attach_fragment(
     attach_atom = mol.GetAtomWithIdx(attach_idx)
     replace_dummy = attach_atom.GetSymbol() == "*"
     target_idx = attach_idx
+    invert_target_chirality = False
+    target_stereo = []
 
     if replace_dummy:
         neighbors = attach_atom.GetNeighbors()
@@ -386,14 +496,47 @@ def _attach_fragment(
         bond = mol.GetBondBetweenAtoms(attach_idx, neighbor.GetIdx())
         if bond is None or bond.GetBondType() != Chem.BondType.SINGLE:
             raise ValueError("Target `*` attachment atom must link through a single bond")
+        target_stereo = _target_stereo_snapshots(mol, attach_idx)
         target_idx = neighbor.GetIdx()
+        target_neighbors = [item.GetIdx() for item in neighbor.GetNeighbors()]
+        if neighbor.GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED:
+            dummy_position = target_neighbors.index(attach_idx)
+            invert_target_chirality = (
+                (len(target_neighbors) - 1 - dummy_position) % 2 == 1
+            )
         mol.RemoveBond(attach_idx, target_idx)
 
-    idx_map = _copy_fragment(mol, src_mol, src_dummy_idx)
+    idx_map, source_stereo = _copy_fragment(
+        mol,
+        src_mol,
+        src_dummy_idx,
+        omitted_replacement_idx=target_idx if src_dummy_idx is not None else None,
+    )
     mol.AddBond(target_idx, idx_map[src_attach_idx], Chem.BondType.SINGLE)
 
     if replace_dummy:
+        mapped_target_stereo = [
+            (
+                begin_idx,
+                end_idx,
+                tuple(
+                    idx_map[src_attach_idx] if atom_idx == attach_idx else atom_idx
+                    for atom_idx in stereo_atoms
+                ),
+                stereo,
+            )
+            for begin_idx, end_idx, stereo_atoms, stereo in target_stereo
+        ]
+        if invert_target_chirality:
+            mol.GetAtomWithIdx(target_idx).InvertChirality()
         mol.RemoveAtom(attach_idx)
+        _restore_stereo_snapshots(
+            mol,
+            mapped_target_stereo + source_stereo,
+            removed_idx=attach_idx,
+        )
+    else:
+        _restore_stereo_snapshots(mol, source_stereo)
 
 
 def _canonical_smiles(mol: Chem.rdchem.Mol) -> str:
@@ -401,6 +544,7 @@ def _canonical_smiles(mol: Chem.rdchem.Mol) -> str:
     for atom in output.GetAtoms():
         atom.SetAtomMapNum(0)
     Chem.SanitizeMol(output)
+    Chem.SetDoubleBondNeighborDirections(output)
     return Chem.MolToSmiles(output, canonical=True, isomericSmiles=True)
 
 

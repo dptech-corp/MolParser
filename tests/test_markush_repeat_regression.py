@@ -12,6 +12,16 @@ class MarkushRepeatRegressionTests(unittest.TestCase):
         self.assertNotIn("<sep>", value)
         self.assertIsNotNone(Chem.MolFromSmiles(value), value)
 
+    def assert_same_isomer(self, actual: str, expected: str) -> None:
+        actual_mol = Chem.MolFromSmiles(actual)
+        expected_mol = Chem.MolFromSmiles(expected)
+        self.assertIsNotNone(actual_mol, actual)
+        self.assertIsNotNone(expected_mol, expected)
+        self.assertEqual(
+            Chem.MolToSmiles(actual_mol, canonical=True, isomericSmiles=True),
+            Chem.MolToSmiles(expected_mol, canonical=True, isomericSmiles=True),
+        )
+
     def test_whole_sru_expands(self) -> None:
         value = mutils.substitute_markush(
             "*CC*<sep><d>0:<dum></d><d>3:<dum></d>|Sg:3|", {}
@@ -94,6 +104,49 @@ class MarkushRepeatRegressionTests(unittest.TestCase):
             )
         with self.assertRaises(ValueError):
             mutils.substitute_markush("CC", {}, max_outputs=0)
+
+    def test_attachment_preserves_tetrahedral_configuration(self) -> None:
+        target = mutils.substitute_markush(
+            "F[C@H](*)Cl<sep><a>2:Me</a>", {}
+        )
+        source = mutils.substitute_markush(
+            "*C<sep><a>0:R[1]</a>", {"R1": "F[C@H](*)Cl"}
+        )
+        self.assert_same_isomer(target, "C[C@@H](F)Cl")
+        self.assert_same_isomer(source, "C[C@@H](F)Cl")
+
+    def test_attachment_preserves_double_bond_stereo(self) -> None:
+        target = mutils.substitute_markush(
+            "*/C=C/C<sep><a>0:Me</a>", {}
+        )
+        source = mutils.substitute_markush(
+            "*C<sep><a>0:R[1]</a>", {"R1": "*/C=C/C"}
+        )
+        self.assert_same_isomer(target, "C/C=C/C")
+        self.assert_same_isomer(source, "C/C=C/C")
+
+    def test_postprocess_repeat_and_abbreviation_preserve_ez(self) -> None:
+        result = mutils.postprocess_caption(
+            "*/C=C/C*<sep><a>0:Me</a><a>4:CH2?2</a>"
+        )
+        self.assert_same_isomer(result["smi"], "C/C=C/CCC")
+        self.assertEqual(result["esmi"], f"{result['smi']}<sep>")
+        self.assertEqual(result["cxsmiles"], result["smi"])
+
+    def test_postprocess_drops_only_unrepairable_indices(self) -> None:
+        atom = mutils.postprocess_caption("CC<sep><a>9:Me</a>")
+        ring = mutils.postprocess_caption("c1ccccc1<sep><r>9:Me</r>")
+        mixed = mutils.postprocess_caption(
+            "CC<sep><a>9:Me</a><a>1:<id>[OH]</a>"
+        )
+
+        self.assertEqual(atom["esmi"], "CC<sep>")
+        self.assertEqual(ring["esmi"], "c1ccccc1<sep>")
+        self.assertFalse(atom["markush"])
+        self.assertFalse(ring["markush"])
+        self.assertNotIn("<a>9:", mixed["esmi"])
+        self.assertIn("<id>[OH]", mixed["esmi"])
+        self.assertTrue(mixed["markush"])
 
 
 if __name__ == "__main__":

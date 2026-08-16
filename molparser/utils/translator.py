@@ -592,12 +592,22 @@ class Translator:
                 is_sru = True
 
             for desc in cls.parse_groups(groups):
-                if not isinstance(desc.id, AtomIndex) or desc.is_circle:
+                if isinstance(desc.id, AtomIndex):
+                    atom_idx = mapnum2idx.get(int(desc.id) + 1)
+                    # Index repair already ran above.  If the source atom still
+                    # cannot be found, drop only this stale record and keep the
+                    # remainder of the caption usable.
+                    if atom_idx is None:
+                        continue
+                    if desc.is_circle:
+                        is_markush = True
+                        continue
+                elif isinstance(desc.id, RingIndex):
+                    if not desc.id.virtual and int(desc.id) >= len(ring_info):
+                        continue
                     is_markush = True
                     continue
-
-                atom_idx = mapnum2idx.get(int(desc.id) + 1)
-                if atom_idx is None:
+                else:
                     is_markush = True
                     continue
 
