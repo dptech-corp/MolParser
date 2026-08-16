@@ -264,6 +264,50 @@ E-SMILES: `C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R
 
 ![VirtualArc rendering](skills/molparser-extended-smiles/assets/images/virtual_arc_with_r3.svg)
 
+Representative cases below are drawn from the raw E-SMILES so repeat and endpoint annotations remain visible.
+
+<details>
+<summary>Colored endpoint balls (MolParser extension)</summary>
+
+```text
+*CC(=O)Nc1c(C#N)c(*)nn1C*<sep><a>0:<id>[blue]</a><a>10:<id>[green]</a><a>14:<id>[green]</a>
+```
+
+![Blue and green endpoint balls](skills/molparser-extended-smiles/assets/images/endpoint-balls-blue-green-green.svg)
+</details>
+
+<details>
+<summary>Whole SRU with explicit E-SMILES 2.0 dummy records</summary>
+
+```text
+*OCCOC(=O)c1ccc(C(*)=O)cc1<sep><d>0:<dum></d><d>12:<dum></d>|Sg:n|
+```
+
+![Whole SRU rendering](skills/molparser-extended-smiles/assets/images/whole-sru-aromatic-ester-n.svg)
+</details>
+
+<details>
+<summary>Local s-group repeat</summary>
+
+```text
+CC(=O)NCOCCC1CC1<sep><g>[5:4]:[6:7]:|Sg:n|</g>
+```
+
+![Local s-group repeat rendering](skills/molparser-extended-smiles/assets/images/sgroup-local-ether-repeat-n.svg)
+</details>
+
+<details>
+<summary>Macrocyclic peptide with an atom-indexed Markush X label</summary>
+
+```text
+C[C@@H](O)[C@H]1N*(=O)[C@@H](CCCCN)NC(=O)CNC(=O)CNC(=O)[C@H](CC(N)=O)NC(=O)[C@H](CCC(=O)O)NC(=O)[C@H](C)N(C)C(=O)[C@@H](Cc2c[nH]c3ccccc23)NC(=O)[C@H](CS)NC(=O)[C@@H](Cc2ccccc2)NC(=O)[C@H](CCCCN)NC(=O)[C@H](CCCNC(=N)N)NC(=O)[C@H](Cc2ccc(O)cc2)NC(=O)[C@H](CCC(N)=O)NC1=O<sep><a>5:X</a>
+```
+
+<img src="skills/molparser-extended-smiles/assets/images/macrocyclic-peptide-markush-x.svg" alt="Macrocyclic peptide Markush rendering" width="800">
+</details>
+
+The same cases and their encoding notes are collected in [`synthetic-examples.md`](skills/molparser-extended-smiles/references/synthetic-examples.md).
+
 For batches, `draw_many` validates one shared configuration and preserves input order:
 
 ```python

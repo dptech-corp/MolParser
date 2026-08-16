@@ -94,9 +94,9 @@ svg_batch = mutils.draw_many(raw_esmiles_batch, output_format="svg", workers=4)
 
 The drawer displays atom substituents, dummy attachment points, abstract rings, and ring-level annotations from the E-SMILES extension.
 
-For Whole SRU, local repeats, all four named/unnamed virtual-arc appearances,
-and fixed-color endpoint balls, read
-[`references/synthetic-examples.md`](references/synthetic-examples.md). Draw the
+For representative fixed-color endpoint balls, Whole SRU, local `<g>` repeats,
+and a large stereochemical atom-Markush structure, read
+[`references/synthetic-examples.md`](references/synthetic-examples.md). Draw each
 raw E-SMILES fixture. Do not call `substitute_markush` first unless the user has
 explicitly requested concrete Markush expansion.
 
@@ -122,6 +122,5 @@ explicitly requested concrete Markush expansion.
 1. `extended-smiles-spec.md`
 2. `figure-index.md`
 3. `references/synthetic-examples.md` when repeat, virtual-arc, or endpoint-ball examples are needed
-4. `references/synthetic-examples.json` when exact fixture E-SMILES, render configuration, or provenance hashes are needed
-5. `validate_esmiles.py`
-6. `source-provenance.md`
+4. `validate_esmiles.py`
+5. `source-provenance.md`

@@ -10,7 +10,6 @@ For this repository, operational guidance has been normalized into English-first
 
 This file is intentionally concise and serves as provenance metadata rather than a full translation extract.
 
-The compact synthetic documentation set is separately traceable through
-`references/synthetic-examples.json`. It records the audited source-set hashes,
-source record names, candidate ids where available, and source SVG hashes. It
-does not copy the full 150,000-record dataset into this repository.
+The four representative records in `references/synthetic-examples.md` are
+project-provided documentation examples. They are not presented as a copy of
+the internal source document or of a larger synthetic dataset.

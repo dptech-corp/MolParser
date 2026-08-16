@@ -155,11 +155,8 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><g>[3:2]:[4:5]:|Sg:20|</g>
 
 If a source depiction contains coordination semantics, electron-transfer arrows, uncertain bond style, or uncertain chirality, do not force it into a new token. Output the best encodable E-SMILES backbone and list the unsupported feature separately.
 
-## Audited Synthetic Compatibility Set
+## Representative Rendering Examples
 
-For a compact set covering Whole SRU, one-atom and multi-atom local repeats,
-round and square bracket rendering, all four virtualArc appearances, and fixed
-colored endpoint balls, read
-[`references/synthetic-examples.md`](references/synthetic-examples.md). The
-machine-readable ten-record selection and source hashes are in
-[`references/synthetic-examples.json`](references/synthetic-examples.json).
+For four compact examples covering fixed-color endpoint balls, a Whole SRU,
+a local `<g>` repeat, and a large stereochemical atom-Markush structure, read
+[`references/synthetic-examples.md`](references/synthetic-examples.md).
