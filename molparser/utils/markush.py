@@ -269,6 +269,8 @@ def _resolve_repetition_count(
         raise ValueError(f"Multiplicity ?{desc.multiple} must resolve to one integer")
     if value is None:
         return None
+    if isinstance(value, bool):
+        raise ValueError(f"Multiplicity ?{desc.multiple} must resolve to one integer")
     try:
         count = int(value)
     except (TypeError, ValueError) as exc:
@@ -816,6 +818,23 @@ def _ring_atom_indices(
     return indices
 
 
+def _available_ring_atom_indices(
+    mol: Chem.rdchem.Mol,
+    source_ring: Iterable[int],
+) -> list[int]:
+    """Return ring atoms with one implicit hydrogen available for substitution."""
+    sanitized = Chem.Mol(mol)
+    try:
+        Chem.SanitizeMol(sanitized)
+    except Exception:
+        return []
+    return [
+        atom_idx
+        for atom_idx in _ring_atom_indices(sanitized, source_ring)
+        if sanitized.GetAtomWithIdx(atom_idx).GetNumImplicitHs() > 0
+    ]
+
+
 def _expand_atom_group(
     states: list[Chem.rdchem.RWMol],
     desc: GroupDesc,
@@ -889,10 +908,18 @@ def _expand_atom_group_copies(
                 f"Cannot copy atom-indexed group `{str(desc)}` without one unique anchor ring"
             )
         source_ring = matching_rings[0]
+        if (
+            attach_atom.GetSymbol() != "*"
+            and ring_anchor_idx
+            not in _available_ring_atom_indices(state, source_ring)
+        ):
+            raise _UnexpandableRepeat(
+                f"Atom-indexed group `{str(desc)}` has no available ring hydrogen"
+            )
 
         sites = [
             site
-            for site in _ring_atom_indices(state, source_ring)
+            for site in _available_ring_atom_indices(state, source_ring)
             if site != ring_anchor_idx
         ]
         for count in counts:
@@ -981,9 +1008,9 @@ def _expand_ring_group(
         return None
 
     for state in states:
-        sites = _ring_atom_indices(state, source_ring)
+        sites = _available_ring_atom_indices(state, source_ring)
         if not sites:
-            raise ValueError(f"Ring index {int(desc.id)} is not present in the molecule")
+            continue
         for count in counts:
             if count < 1 or count > len(sites):
                 continue
@@ -997,7 +1024,7 @@ def _expand_ring_group(
                         raise ValueError(
                             f"Markush expansion exceeded max_outputs={max_outputs}"
                         )
-    return next_states
+    return next_states or None
 
 
 def _format_substitution_outputs(

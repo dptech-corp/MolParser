@@ -38,6 +38,26 @@ LONG_CHAR_ELEMENTS = (
 
 
 logger = logging.getLogger(__name__)
+_MAX_AUTOMATIC_REPEAT_COUNT = 1024
+
+
+def _is_safe_carbon_chain_repeat_target(atom: Chem.rdchem.Atom) -> bool:
+    """Return whether ``?N`` chain insertion preserves the target chemistry."""
+    if atom.GetSymbol() not in {"*", "C"}:
+        return False
+    if atom.GetDegree() not in {1, 2} or atom.GetIsAromatic() or atom.IsInRing():
+        return False
+    if (
+        atom.GetIsotope() != 0
+        or atom.GetFormalCharge() != 0
+        or atom.GetNumRadicalElectrons() != 0
+        or atom.GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED
+    ):
+        return False
+    return all(
+        bond.GetBondType() == Chem.BondType.SINGLE and not bond.GetIsAromatic()
+        for bond in atom.GetBonds()
+    )
 
 
 @unique
@@ -598,10 +618,26 @@ class Translator:
                     if desc.multiple and not desc.multiple.isdigit():
                         is_markush = True
                         continue
+                    if (
+                        desc.multiple
+                        and int(desc.multiple) > _MAX_AUTOMATIC_REPEAT_COUNT
+                    ):
+                        is_markush = True
+                        continue
+                    if desc.multiple and not _is_safe_carbon_chain_repeat_target(atom):
+                        is_markush = True
+                        continue
                     is_markush = chem_utils.carbon_chain_repetition_process(
                         mol, atom_idx, desc, is_markush, error_msg=False
                     )
                     consumed_atom_groups.add(int(desc.id))
+                    continue
+
+                # A multiplicity suffix belongs to the complete group.  Do not
+                # silently consume it as one ordinary abbreviation when the
+                # topology cannot be expanded to one unique structure.
+                if desc.multiple:
+                    is_markush = True
                     continue
 
                 # Build lookup key, e.g. NO + 2 -> NO2.
@@ -743,7 +779,7 @@ class Translator:
 
         return _convert_refactored_esmi_to_cxsmiles(
             esmi,
-            source_groups=raw_groups,
+            source_groups=(translated.groups if translated is not None else raw_groups),
             sru=is_sru,
         )
 
