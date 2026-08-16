@@ -21,6 +21,12 @@ cd MolParser
 pip install -e .
 ```
 
+If the package index is unavailable but the runtime dependencies are already installed, reuse the local build tools:
+
+```bash
+python -m pip install --no-build-isolation -e .
+```
+
 For image/PDF OCSR inference, install optional dependencies:
 
 ```bash
