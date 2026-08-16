@@ -2,16 +2,12 @@
 
 MolParser is a toolkit for **OCSR** (Optical Chemical Structure Recognition) workflows based on **E-SMILES** (Extended SMILES), a molecular string representation designed to support Markush structures and other extended chemical notations. It provides model-based parsing of molecular images and PDFs into E-SMILES / SMILES, together with utilities for E-SMILES normalization, abbreviation substitution, CXSMILES conversion, and structure rendering. The E-SMILES notation follows the formulation introduced in the [MolParser paper](https://arxiv.org/abs/2411.11098).
 
-
-| Component                           | Role                                                                                                          |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Component                             | Role                                                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `molparser/models/`                 | OCSR pipeline for image / PDF molecule extraction and recognition                                             |
 | `molparser/utils/`                  | E-SMILES utilities for normalization, abbreviation substitution, CXSMILES conversion, and structure rendering |
 | `skills/molparser-extended-smiles/` | E-SMILES skills with concise rules and examples for LLM / OCSR agents                                         |
 | `skills/molparser-visual-ocsr/`     | OCSR skills for image / PDF molecule extraction workflows                                                     |
-
-
-
 
 ## Installation
 
@@ -42,11 +38,7 @@ from molparser import MolParser
 from molparser import utils as mutils
 ```
 
-
-
 ## Quick start
-
-
 
 ### OCSR Inference
 
@@ -124,8 +116,6 @@ Behavior by input mode:
 - Single PDF: renders each page, runs PDF MolDet, and returns one result for each detected molecule. `page_index`, `bbox`, and `confidence` are populated.
 - List input: returns a flat list across all inputs. Use `input_index` to map each result back to the original list item.
 
-
-
 ## E-SMILES overview
 
 E-SMILES combines a base SMILES with an optional extension:
@@ -183,8 +173,6 @@ sru: False
 groups:
 ```
 
-
-
 ### Substitute Markush Definitions
 
 Substitute Markush labels with a definition dictionary. Definition keys can use either `R1` or `R[1]`; values can be known abbreviations or SMILES fragments. When a fragment contains `*`, that atom is treated as the attachment point.
@@ -222,8 +210,6 @@ local_repeat = mutils.Translator.substitute_markush(
 # C<sep><s>CC<sep>|Sg:3|</s>
 ```
 
-
-
 ### Render E-SMILES
 
 Render E-SMILES as SVG or PNG. Existing SMILES/E-SMILES 1.0 captions retain the original drawing defaults; SRU brackets, local `<g>` brackets, skeletal single-CH2 repeats, empty-name/multiple virtual arcs, and approved endpoint balls are enabled only when their syntax is present.
@@ -236,9 +222,6 @@ svg_text = mutils.draw("*C(O)c1cc(C(=O)N(*)*)cc(-c2*ccc*2)c1<sep><a>0:CF3</a><a>
 
 svg_path = Path("molecule.svg")
 svg_path.write_text(svg_text, encoding="utf-8")
-
-png_bytes = mutils.draw("CCO", output_format="png")
-Path("ethanol.png").write_bytes(png_bytes)
 ```
 
 `molecule.svg` is a local render artifact.
@@ -319,8 +302,6 @@ svgs = mutils.draw_many(
 
 ## LLM / OCSR workflow
 
-
-
 ### Skill context
 
 For image/PDF molecule extraction with MolDet and MolParser recognition, load:
@@ -333,8 +314,6 @@ For E-SMILES generation, validation, normalization, Markush substitution, and re
 - `skills/molparser-extended-smiles/extended-smiles-spec.md`
 - `skills/molparser-extended-smiles/figure-index.md`
 
-
-
 ### Expected model output
 
 ```text
@@ -343,8 +322,6 @@ For E-SMILES generation, validation, normalization, Markush substitution, and re
 3. Markush status
 4. Unsupported or ambiguous chemistry
 ```
-
-
 
 ### Validate and normalize
 
@@ -361,8 +338,6 @@ Huggingface Homepage: [UniParser/molparser](https://huggingface.co/collections/U
 - [Uni-Parser](https://arxiv.org/abs/2512.15098) — agent-oriented scientific document parsing with the latest MolParser. [Demo](https://uniparser.dp.tech/)
 - [MolParser](https://arxiv.org/abs/2411.11098) — end-to-end molecular recognition. [Demo](https://ocsr.dp.tech/)
 - [MolDetv2 weights](https://huggingface.co/UniParser/MolDetv2) — lightweight molecule detector. [Demo](https://huggingface.co/spaces/AI4Industry/MolDet)
-
-
 
 ## Citation
 
@@ -384,8 +359,6 @@ Huggingface Homepage: [UniParser/molparser](https://huggingface.co/collections/U
   year={2025}
 }
 ```
-
-
 
 ## License
 
