@@ -125,7 +125,7 @@ Use `<g>[INNER_PORT:OUTER_PORT]:...:|Sg:n|</g>` for an s-group repeat record.
 - `OUTER_PORT`: atom index outside the repeat structure.
 - Multiple port pairs are written by repeating `[INNER_PORT:OUTER_PORT]` and separating fields with `:`.
 - The repeat count defaults to `n` when abstract; explicit numbers, letters, and ranges such as `20`, `m`, or `m-n` are syntactically accepted.
-- Current utilities preserve `<s>` and `<g>` records as pre-compatible annotations; they do not expand repeat structures. `substitute_markush` may replace a symbolic `<g>` count with one positive integer supplied in the definition dictionary, but it leaves the graph and `<g>` annotation structure intact.
+- `substitute_markush` defaults to best-effort repeat handling. It physically expands a concrete Whole-SRU or two-port `<g>` repeat only when the boundary bonds, cut set, and scope are unambiguous; a fully resolved result is RDKit-parseable SMILES. Otherwise it preserves the unresolved record as E-SMILES and still substitutes independent resolvable labels. Use `repeat_policy="strict"` to reject such residuals or `"preserve"` for annotation-only repeat handling.
 - Round parentheses and square brackets are equivalent drawing styles for the same `<g>` record; bracket shape is not encoded in E-SMILES.
 
 ```text
@@ -144,7 +144,7 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><g>[3:2]:[4:5]:|Sg:20|</g>
 - `molparser.utils.postprocess_caption` / `Translator.refactor` canonicalize SMILES and substitute known atom-indexed abbreviations from `molparser/utils/abbrevs_example.csv` when the attachment is chemically valid.
 - Resolved substituents are folded into the base `smi`; unresolved Markush or ring-level annotations remain in `groups`.
 - Pre-compatible `<s>` records are preserved in `groups`; `substitute_markush` can substitute labels inside one single-level substructure record and return the result as an E-SMILES annotation, without attaching or expanding it into the main molecule. An `<s>` nested inside another `<s>` is outside the supported grammar and is rejected.
-- Pre-compatible `<g>`, `<v>`, and `<r><v>...` records are preserved in `groups` and are not chemically expanded or remapped by substitution. A symbolic `<g>` count can resolve to one positive integer without physical expansion. Use the gates in `references/synthetic-examples.md` before publishing snapshot assets.
+- Pre-compatible `<s>` and under-specified `<g>`, `<v>`, or `<r><v>...` portions remain in `groups`. When other substitutions reorder the outer graph, retained `<g>` ports, `<v>` endpoints, and `<c>` atom indices are remapped; if an endpoint was removed, best-effort mode rolls back that branch instead of emitting a stale index. A symbolic `<g>` count may resolve to one positive integer even when its graph remains residual.
 - `draw` renders SMILES or E-SMILES to SVG/PNG for visual QA, including SRU and local-repeat brackets, virtual arcs, and approved MolParser endpoint-ball labels.
 
 ## 6. Unsupported Chemistry
@@ -166,6 +166,5 @@ Preserve the encodable backbone, do not invent tokens, and report unencoded chem
 - no whitespace inside group labels;
 - local substructure multiplicity uses `?n`, `?1-3`, or `?3`;
 - SRU repetition uses `|Sg:n|` or an explicit count such as `|Sg:20|`;
-- supported extension indexes are regenerated after canonicalization or substitution; pre-compatible `<s>`, `<g>`, and `<v>` annotations are preserved without semantic remapping.
+- supported retained `<g>`, `<v>`, and atom/ring indexes are remapped after canonicalization or substitution; if an endpoint is removed and cannot be remapped, best-effort mode preserves the original branch instead of silently changing the annotated scope.
 - an unnamed virtualArc uses an empty name field, `<v>0::[START:END]</v>`;
-- newly generated virtualArc pairs use `START < END`, lexicographic pair order, and consecutive ids, while readers remain tolerant of legacy reversed endpoints.

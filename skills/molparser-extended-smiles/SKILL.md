@@ -49,13 +49,13 @@ result = mutils.postprocess_caption(raw_esmiles)
 
 ## Markush Definition Substitution
 
-Use `substitute_markush` when unresolved Markush labels should be expanded into
-concrete SMILES. Definition keys can use `R1` or `R[1]`; values can be known
+Use `substitute_markush` when unresolved Markush labels or repeat counts should
+be resolved. Definition keys can use `R1` or `R[1]`; values can be known
 abbreviations (`Me`, `Cl`, `Ph`) or SMILES fragments. If a fragment contains
 `*`, that atom is used as the attachment point. The return value is a single
-SMILES string when the substitution is fully determined, or a list of SMILES
-when regio-uncertain attachments or multiplicity ranges produce multiple
-deduplicated structures.
+RDKit-parseable SMILES string when the branch is fully determined, a list for
+multiple enumerated structures, or residual E-SMILES when best-effort expansion
+cannot infer a connection without guessing.
 
 ```python
 from molparser import utils as mutils
@@ -76,7 +76,8 @@ result = mutils.substitute_markush(
   replication; `?n` reads the replication count from the definition dictionary, e.g.
   `<a>2:CH2?n</a>` with `{"n": 10}`.
 - Labels inside a single-level pre-compatible `<s>` record are substituted by `substitute_markush`, and the record is returned as a preserved E-SMILES annotation, e.g. `<s>**<sep><a>0:L[3]</a><a>1:R[3]</a>|Sg:n|</s>` can become `<s>ClBr<sep>|Sg:n|</s>`. An `<s>` nested inside another `<s>` is rejected. This does not change the existing `?n` copy behavior.
-- Pre-compatible `<g>`, `<v>`, and `<r><v>...` records remain annotations and are not physically expanded by `substitute_markush`. A symbolic `<g>` count may be replaced with one positive integer from the definition dictionary, for example `|Sg:n|` with `{"n": 20}` becomes `|Sg:20|` while the molecular graph is unchanged.
+- With the default `repeat_policy="best_effort"`, physically expand Whole-SRU and two-port `<g>` repeats only when their boundary bonds and scope are unambiguous. Preserve under-specified `<s>`, `<g>`, `<v>`, and `<r><v>...` portions as E-SMILES, while substituting independent resolvable labels and remapping retained outer-graph indices. Use `strict` to reject residual repeats and `preserve` for annotation-only repeat handling.
+- For the PEG-like example `*OCCO*<sep><d>0:<dum></d><d>5:<dum></d><g>[1:0]:[3:4]:|Sg:12|</g>`, pass `terminal_policy="hydrogen"`; the result is `"O" + "CCO" * 12` (C24H50O13), a plain RDKit-parseable SMILES.
 
 ## Rendering
 
@@ -107,7 +108,7 @@ explicitly requested concrete Markush expansion.
 - `<g>` port pairs use `[INNER_PORT:OUTER_PORT]`; repeat count defaults to `n` and may be explicit, e.g. `|Sg:20|`.
 - `GROUP_LABEL` may be a common abbreviation (`Me`, `OMe`, `CF3`), a Markush label (`R[1]`), or a special Markush label `<id>[NOTE]`. For dummy attachment points, prefer `<d>[ATOM_INDEX]:<dum></d>` and accept legacy `<a>[ATOM_INDEX]:<dum></a>`.
 - Use local substructure multiplicity suffixes (`?n`, `?1-3`, `?3`) separately from SRU-level `|Sg:n|`.
-- After canonicalization or abbreviation substitution, regenerate affected supported extension indexes; pre-compatible `<s>`, `<g>`, and `<v>` annotations are currently preserved without semantic remapping.
+- After canonicalization or abbreviation substitution, remap supported retained `<g>`, `<v>`, and atom/ring annotations. If a resolved substitution removes an endpoint needed by a retained annotation, best-effort mode rolls that branch back instead of emitting a silently corrupted record.
 
 ## Boundary Policy
 

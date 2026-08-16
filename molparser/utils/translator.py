@@ -6,7 +6,7 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union
 
 from rdkit import Chem, RDLogger
 
@@ -755,11 +755,14 @@ class Translator:
         *,
         max_outputs: int = 1024,
         error_msg: bool = False,
+        repeat_policy: Literal["preserve", "best_effort", "strict"] = "best_effort",
+        terminal_policy: Literal["preserve", "hydrogen"] = "preserve",
     ) -> Union[str, List[str]]:
-        """Substitute Markush labels and symbolic S-group counts.
+        """Substitute Markush labels and optionally physicalize repeat counts.
 
         The import is intentionally local because ``markush`` uses the parser
-        types defined in this module.
+        types defined in this module. See :func:`molparser.utils.substitute_markush`
+        for repeat and terminal policy semantics.
         """
         try:
             from .markush import substitute_markush as _substitute_markush
@@ -771,6 +774,8 @@ class Translator:
             definitions,
             max_outputs=max_outputs,
             error_msg=error_msg,
+            repeat_policy=repeat_policy,
+            terminal_policy=terminal_policy,
         )
 
 

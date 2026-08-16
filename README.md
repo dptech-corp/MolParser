@@ -2,12 +2,16 @@
 
 MolParser is a toolkit for **OCSR** (Optical Chemical Structure Recognition) workflows based on **E-SMILES** (Extended SMILES), a molecular string representation designed to support Markush structures and other extended chemical notations. It provides model-based parsing of molecular images and PDFs into E-SMILES / SMILES, together with utilities for E-SMILES normalization, abbreviation substitution, CXSMILES conversion, and structure rendering. The E-SMILES notation follows the formulation introduced in the [MolParser paper](https://arxiv.org/abs/2411.11098).
 
-| Component                             | Role                                                                                                          |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+
+| Component                           | Role                                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `molparser/models/`                 | OCSR pipeline for image / PDF molecule extraction and recognition                                             |
 | `molparser/utils/`                  | E-SMILES utilities for normalization, abbreviation substitution, CXSMILES conversion, and structure rendering |
 | `skills/molparser-extended-smiles/` | E-SMILES skills with concise rules and examples for LLM / OCSR agents                                         |
 | `skills/molparser-visual-ocsr/`     | OCSR skills for image / PDF molecule extraction workflows                                                     |
+
+
+
 
 ## Installation
 
@@ -38,7 +42,11 @@ from molparser import MolParser
 from molparser import utils as mutils
 ```
 
-## Quick start
+
+
+## Quick Start
+
+
 
 ### OCSR Inference
 
@@ -116,6 +124,8 @@ Behavior by input mode:
 - Single PDF: renders each page, runs PDF MolDet, and returns one result for each detected molecule. `page_index`, `bbox`, and `confidence` are populated.
 - List input: returns a flat list across all inputs. Use `input_index` to map each result back to the original list item.
 
+
+
 ## E-SMILES overview
 
 E-SMILES combines a base SMILES with an optional extension:
@@ -130,13 +140,13 @@ Common extension records:
 - `<a>12:<id>[DNA]</a>` — atom-indexed special Markush label with a custom note
 - `<r>0:R[1]</r>` — ring-indexed substituent (regio-uncertain attachment)
 - `<c>9:B</c>` — abstract-ring or superatom placeholder
-- `<d>0:<dum></d>` — explicit dummy attachment point (E-SMILES 2.0 form; legacy `<a>0:<dum></a>` is still accepted)
+- `<d>0:<dum></d>` — explicit dummy attachment point (E-SMILES 2.0 form; legacy `<a>0:<dum></a>` in E-SMILES 1.0 is still accepted)
 - `<s>...</s>` — nested substructure record for ring-external repeat fragments
 - `<g>[3:2]:[5:6]:|Sg:n|</g>` — local s-group repeat record with two inner/outer boundary ports
-- `<v>0:A:[0:2]</v>` — virtualArc record; the name may be empty and `<r><v>0:R[3]</r>` annotates a substituent on that virtualArc
+- `<v>0:A:[0:2]</v>` — virtualArc record
 - `|Sg:n|` — structural repeating unit (SRU) marker
 - `?n` — local substructure multiplicity suffixes
-- `<a>2:<id>[blue]</a>` — MolParser endpoint-ball extension; other `<id>[...]` values remain text labels
+- `<id>` — Special markush, such as colored circle, `<id>[...]` values remain text labels
 
 Full specification: [skills/molparser-extended-smiles/extended-smiles-spec.md](skills/molparser-extended-smiles/extended-smiles-spec.md)
 
@@ -173,6 +183,8 @@ sru: False
 groups:
 ```
 
+
+
 ### Substitute Markush Definitions
 
 Substitute Markush labels with a definition dictionary. Definition keys can use either `R1` or `R[1]`; values can be known abbreviations or SMILES fragments. When a fragment contains `*`, that atom is treated as the attachment point.
@@ -190,7 +202,7 @@ print(result)
 
 Ring-indexed Markush records expand regio-uncertain attachments into a SMILES list. Multiplicity suffixes such as `?3`, `?1-3`, and `?n` encode local substructure replication over possible ring sites; `?n` reads the replication count from the definition dictionary.
 
-Single-level `<s>...</s>` substructure records have their internal labels substituted and are returned as preserved E-SMILES annotations; they are not attached back into the main molecule and do not change the existing `?` copy behavior. Nesting another `<s>` inside an `<s>` is intentionally rejected. Symbolic SRU counts in `<s>`, `<g>`, or a top-level `|Sg:...|` can be resolved from the same dictionary when the value is one positive integer. For `<g>`, only the count annotation changes—the molecular graph is not expanded.
+The default `repeat_policy="best_effort"` physically expands concrete Whole-SRU and local `<g>` repeats only when the two connection boundaries are unambiguous. Fully resolved branches are returned as RDKit-parseable SMILES. Any unresolved or under-specified scope remains E-SMILES, while independent resolvable labels are still substituted and retained indices are remapped. Use `repeat_policy="strict"` to reject such residual branches, or `"preserve"` for annotation-only repeat handling. Single-level `<s>...</s>` records remain E-SMILES because they do not encode a connection back to the outer molecule; nesting another `<s>` is rejected.
 
 ```python
 result = mutils.substitute_markush(
@@ -203,12 +215,17 @@ print(result)
 ```
 
 ```python
-local_repeat = mutils.Translator.substitute_markush(
-    "C<sep><s>*C<sep><a>0:R[1]</a>|Sg:n|</s>",
-    {"R1": "Me", "n": 3},
+peg12 = mutils.substitute_markush(
+    "*OCCO*<sep><d>0:<dum></d><d>5:<dum></d>"
+    "<g>[1:0]:[3:4]:|Sg:12|</g>",
+    {},
+    terminal_policy="hydrogen",
 )
-# C<sep><s>CC<sep>|Sg:3|</s>
+# H-(O-CH2-CH2)12-OH; C24H50O13; RDKit-valid plain SMILES.
+assert peg12 == "O" + "CCO" * 12
 ```
+
+
 
 ### Render E-SMILES
 
@@ -237,7 +254,7 @@ cairosvg.svg2png(url=str(svg_path), write_to=str(png_path))
 
 Rendered example:
 
-![Rendered E-SMILES example](skills/molparser-extended-smiles/assets/images/readme_molecule.svg)
+Rendered E-SMILES example
 
 **Updates**
 
@@ -245,53 +262,53 @@ Rendered example:
 
 E-SMILES: `C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>`
 
-![VirtualArc rendering](skills/molparser-extended-smiles/assets/images/virtual_arc_with_r3.svg)
+VirtualArc rendering
 
 Representative cases below are drawn from the raw E-SMILES so repeat and endpoint annotations remain visible.
 
-<details>
-<summary>Colored endpoint balls (MolParser extension)</summary>
+Colored endpoint balls (MolParser extension)
 
 ```text
 *CC(=O)Nc1c(C#N)c(*)nn1C*<sep><a>0:<id>[blue]</a><a>10:<id>[green]</a><a>14:<id>[green]</a>
 ```
 
-![Blue and green endpoint balls](skills/molparser-extended-smiles/assets/images/endpoint-balls-blue-green-green.svg)
-</details>
+Blue and green endpoint balls
 
-<details>
-<summary>Whole SRU with explicit E-SMILES 2.0 dummy records</summary>
+
+
+Whole SRU with explicit E-SMILES 2.0 dummy records
 
 ```text
 *OCCOC(=O)c1ccc(C(*)=O)cc1<sep><d>0:<dum></d><d>12:<dum></d>|Sg:n|
 ```
 
-![Whole SRU rendering](skills/molparser-extended-smiles/assets/images/whole-sru-aromatic-ester-n.svg)
-</details>
+Whole SRU rendering
 
-<details>
-<summary>Local s-group repeat</summary>
+
+
+Local s-group repeat
 
 ```text
 CC(=O)NCOCCC1CC1<sep><g>[5:4]:[6:7]:|Sg:n|</g>
 ```
 
-![Local s-group repeat rendering](skills/molparser-extended-smiles/assets/images/sgroup-local-ether-repeat-n.svg)
-</details>
+Local s-group repeat rendering
 
-<details>
-<summary>Macrocyclic peptide with an atom-indexed Markush X label</summary>
+
+
+Macrocyclic peptide with an atom-indexed Markush X label
 
 ```text
 C[C@@H](O)[C@H]1N*(=O)[C@@H](CCCCN)NC(=O)CNC(=O)CNC(=O)[C@H](CC(N)=O)NC(=O)[C@H](CCC(=O)O)NC(=O)[C@H](C)N(C)C(=O)[C@@H](Cc2c[nH]c3ccccc23)NC(=O)[C@H](CS)NC(=O)[C@@H](Cc2ccccc2)NC(=O)[C@H](CCCCN)NC(=O)[C@H](CCCNC(=N)N)NC(=O)[C@H](Cc2ccc(O)cc2)NC(=O)[C@H](CCC(N)=O)NC1=O<sep><a>5:X</a>
 ```
 
-<img src="skills/molparser-extended-smiles/assets/images/macrocyclic-peptide-markush-x.svg" alt="Macrocyclic peptide Markush rendering" width="800">
-</details>
 
-The same cases and their encoding notes are collected in [`synthetic-examples.md`](skills/molparser-extended-smiles/references/synthetic-examples.md).
+
+The same cases and their encoding notes are collected in `[synthetic-examples.md](skills/molparser-extended-smiles/references/synthetic-examples.md)`.
 
 ## LLM / OCSR workflow
+
+
 
 ### Skill context
 
@@ -305,6 +322,8 @@ For E-SMILES generation, validation, normalization, Markush substitution, and re
 - `skills/molparser-extended-smiles/extended-smiles-spec.md`
 - `skills/molparser-extended-smiles/figure-index.md`
 
+
+
 ### Expected model output
 
 ```text
@@ -313,6 +332,8 @@ For E-SMILES generation, validation, normalization, Markush substitution, and re
 3. Markush status
 4. Unsupported or ambiguous chemistry
 ```
+
+
 
 ### Validate and normalize
 
@@ -329,6 +350,8 @@ Huggingface Homepage: [UniParser/molparser](https://huggingface.co/collections/U
 - [Uni-Parser](https://arxiv.org/abs/2512.15098) — agent-oriented scientific document parsing with the latest MolParser. [Demo](https://uniparser.dp.tech/)
 - [MolParser](https://arxiv.org/abs/2411.11098) — end-to-end molecular recognition. [Demo](https://ocsr.dp.tech/)
 - [MolDetv2 weights](https://huggingface.co/UniParser/MolDetv2) — lightweight molecule detector. [Demo](https://huggingface.co/spaces/AI4Industry/MolDet)
+
+
 
 ## Citation
 
@@ -350,6 +373,8 @@ Huggingface Homepage: [UniParser/molparser](https://huggingface.co/collections/U
   year={2025}
 }
 ```
+
+
 
 ## License
 
