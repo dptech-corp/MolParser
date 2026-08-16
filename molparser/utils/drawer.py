@@ -2235,30 +2235,22 @@ def draw(
         config if isinstance(config, DrawingConfig) else _validate_config(config)
     )
     requested_format = output_format.lower()
-    svg_to_png = None
-    if requested_format == "png" and _needs_svg_overlay(smi, drawing_config):
-        try:
-            # CairoSVG is a required project dependency.  Rendering PNG from
-            # the completed SVG keeps custom Markush connectors, label paths,
-            # margins, and stereobonds identical across the two public formats.
-            from cairosvg import svg2png as svg_to_png
-        except (ImportError, OSError):
-            # Keep the historical RDKit-Cairo fallback for environments that
-            # import the source tree without installing its declared extras.
-            svg_to_png = None
-        if svg_to_png is None and Tokens.separator in smi and any(
-            token in smi
-            for token in ("<s>", "<g>", "<v>", "|Sg:", "<r>", "<d>", "<c>")
-        ):
-            raise RuntimeError(
-                "CairoSVG is required for PNG output containing SVG-only "
-                "E-SMILES overlays; the direct Cairo fallback cannot render "
-                "or expand them safely"
-            )
+    if requested_format not in {"svg", "png"}:
+        raise ValueError("output_format must be 'svg' or 'png'")
 
-    drawer_type: Literal["SVG", "PNG"] = (
-        "SVG" if requested_format == "svg" or svg_to_png is not None else "PNG"
-    )
+    svg_to_png = None
+    if requested_format == "png":
+        try:
+            from cairosvg import svg2png as svg_to_png
+        except (ImportError, OSError) as exc:
+            raise RuntimeError(
+                "CairoSVG is required for PNG output because PNG is rendered "
+                "from the completed SVG to preserve its viewBox and margins"
+            ) from exc
+
+    # Always build the final SVG first.  The same viewBox, overlays, margins,
+    # labels, and stereobonds therefore define both public output formats.
+    drawer_type: Literal["SVG", "PNG"] = "SVG"
     if Tokens.separator in smi:
         drawing = _DrawingTranslator.reconstruct_mol(
             mol=smi,
