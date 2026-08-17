@@ -6,7 +6,7 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union
 
 from rdkit import Chem, RDLogger
 
@@ -38,6 +38,26 @@ LONG_CHAR_ELEMENTS = (
 
 
 logger = logging.getLogger(__name__)
+_MAX_AUTOMATIC_REPEAT_COUNT = 1024
+
+
+def _is_safe_carbon_chain_repeat_target(atom: Chem.rdchem.Atom) -> bool:
+    """Return whether ``?N`` chain insertion preserves the target chemistry."""
+    if atom.GetSymbol() not in {"*", "C"}:
+        return False
+    if atom.GetDegree() not in {1, 2} or atom.GetIsAromatic() or atom.IsInRing():
+        return False
+    if (
+        atom.GetIsotope() != 0
+        or atom.GetFormalCharge() != 0
+        or atom.GetNumRadicalElectrons() != 0
+        or atom.GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED
+    ):
+        return False
+    return all(
+        bond.GetBondType() == Chem.BondType.SINGLE and not bond.GetIsAromatic()
+        for bond in atom.GetBonds()
+    )
 
 
 @unique
@@ -562,19 +582,32 @@ class Translator:
                     f"{Tokens.ring_start}{Tokens.virtual_start}",
                 )
             )
-            is_markush = False
+            is_markush = preserve_precompat_groups
             is_sru = False
 
-            if cls.parse_extension(ext) == "Sg:n":
+            if re.fullmatch(
+                r"Sg:[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?",
+                cls.parse_extension(ext),
+            ):
                 is_sru = True
 
             for desc in cls.parse_groups(groups):
-                if not isinstance(desc.id, AtomIndex) or desc.is_circle:
+                if isinstance(desc.id, AtomIndex):
+                    atom_idx = mapnum2idx.get(int(desc.id) + 1)
+                    # Index repair already ran above.  If the source atom still
+                    # cannot be found, drop only this stale record and keep the
+                    # remainder of the caption usable.
+                    if atom_idx is None:
+                        continue
+                    if desc.is_circle:
+                        is_markush = True
+                        continue
+                elif isinstance(desc.id, RingIndex):
+                    if not desc.id.virtual and int(desc.id) >= len(ring_info):
+                        continue
                     is_markush = True
                     continue
-
-                atom_idx = mapnum2idx.get(int(desc.id) + 1)
-                if atom_idx is None:
+                else:
                     is_markush = True
                     continue
 
@@ -595,10 +628,26 @@ class Translator:
                     if desc.multiple and not desc.multiple.isdigit():
                         is_markush = True
                         continue
+                    if (
+                        desc.multiple
+                        and int(desc.multiple) > _MAX_AUTOMATIC_REPEAT_COUNT
+                    ):
+                        is_markush = True
+                        continue
+                    if desc.multiple and not _is_safe_carbon_chain_repeat_target(atom):
+                        is_markush = True
+                        continue
                     is_markush = chem_utils.carbon_chain_repetition_process(
                         mol, atom_idx, desc, is_markush, error_msg=False
                     )
                     consumed_atom_groups.add(int(desc.id))
+                    continue
+
+                # A multiplicity suffix belongs to the complete group.  Do not
+                # silently consume it as one ordinary abbreviation when the
+                # topology cannot be expanded to one unique structure.
+                if desc.multiple:
+                    is_markush = True
                     continue
 
                 # Build lookup key, e.g. NO + 2 -> NO2.
@@ -740,8 +789,39 @@ class Translator:
 
         return _convert_refactored_esmi_to_cxsmiles(
             esmi,
-            source_groups=raw_groups,
+            source_groups=(translated.groups if translated is not None else raw_groups),
             sru=is_sru,
+        )
+
+    @classmethod
+    def substitute_markush(
+        cls,
+        caption: str,
+        definitions: Mapping[str, Union[int, str, Sequence[str]]],
+        *,
+        max_outputs: int = 1024,
+        error_msg: bool = False,
+        repeat_policy: Literal["preserve", "best_effort", "strict"] = "best_effort",
+        terminal_policy: Literal["preserve", "hydrogen"] = "preserve",
+    ) -> Union[str, List[str]]:
+        """Substitute Markush labels and optionally physicalize repeat counts.
+
+        The import is intentionally local because ``markush`` uses the parser
+        types defined in this module. See :func:`molparser.utils.substitute_markush`
+        for repeat and terminal policy semantics.
+        """
+        try:
+            from .markush import substitute_markush as _substitute_markush
+        except ImportError:  # Support running from package directory.
+            from markush import substitute_markush as _substitute_markush
+
+        return _substitute_markush(
+            caption,
+            definitions,
+            max_outputs=max_outputs,
+            error_msg=error_msg,
+            repeat_policy=repeat_policy,
+            terminal_policy=terminal_policy,
         )
 
 

@@ -17,6 +17,7 @@ wheels/
 *.svg
 *.png
 !skills/**/assets/**/*.png
+!skills/**/assets/**/*.svg
 
 output*/
 TODO

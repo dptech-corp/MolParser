@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "molparser"
-version = "0.1.0"
-description = "MolParser utilities for E-SMILES, Markush substitution, CXSMILES, and rendering."
+version = "1.0.0"
+description = "MolParser Toolkit for Molecular Structure Parsing"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
