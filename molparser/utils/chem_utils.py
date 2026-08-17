@@ -14,6 +14,10 @@ from rdkit import Chem
 _ABBREV_CSV = Path(__file__).parent / "abbrevs_example.csv"
 
 
+class UnmappableAnnotationError(ValueError):
+    """A retained annotation references an atom removed by substitution."""
+
+
 def _load_abbrev_smi() -> Dict[str, str]:
     mapping: Dict[str, str] = {}
     with _ABBREV_CSV.open(encoding="utf-8") as f:
@@ -41,14 +45,58 @@ def get_mol(smi: str) -> Chem.rdchem.Mol:
     return mol
 
 
-def _preserved_records(groups: str) -> str:
-    pattern = r"<s>.*?</s>|<g>.*?</g>|<v>.*?</v>|<r><v>\d+:.+?</r>"
-    return "".join(match.group(0) for match in re.finditer(pattern, groups, re.DOTALL))
+_PRESERVED_RECORD_PATTERN = re.compile(
+    r"<s>.*?</s>|<g>.*?</g>|<r><v>\d+:.+?</r>|<v>.*?</v>|<c>.*?</c>",
+    re.DOTALL,
+)
+_PORT_PAIR_PATTERN = re.compile(r"\[(?P<left>\d+):(?P<right>\d+)\]")
+_ATOM_RECORD_INDEX_PATTERN = re.compile(r"(?<=<c>)(?P<index>\d+)(?=:)")
+
+
+def _preserved_records(
+    groups: str,
+    atom_index_map: Dict[int, int] | None = None,
+) -> str:
+    """Return pre-compatible records, remapping top-level graph indices.
+
+    Nested ``<s>`` records own a separate molecule namespace and are therefore
+    kept byte-for-byte.  Top-level local-SRU ports and virtual-arc endpoints,
+    however, refer to the outer graph and must follow canonical atom ordering.
+    """
+
+    def remap_pair(match: re.Match) -> str:
+        if atom_index_map is None:
+            return match.group(0)
+        left, right = int(match.group("left")), int(match.group("right"))
+        if left not in atom_index_map or right not in atom_index_map:
+            raise UnmappableAnnotationError(
+                "Unable to remap a preserved E-SMILES atom index"
+            )
+        return f"[{atom_index_map[left]}:{atom_index_map[right]}]"
+
+    records: List[str] = []
+    for match in _PRESERVED_RECORD_PATTERN.finditer(groups):
+        record = match.group(0)
+        if record.startswith("<g>") or record.startswith("<v>"):
+            record = _PORT_PAIR_PATTERN.sub(remap_pair, record)
+        elif record.startswith("<c>") and atom_index_map is not None:
+            indexed = _ATOM_RECORD_INDEX_PATTERN.search(record)
+            old_index = int(indexed.group("index")) if indexed is not None else -1
+            if old_index not in atom_index_map:
+                raise UnmappableAnnotationError(
+                    "Unable to remap a preserved E-SMILES atom index"
+                )
+            record = _ATOM_RECORD_INDEX_PATTERN.sub(
+                str(atom_index_map[old_index]),
+                record,
+                count=1,
+            )
+        records.append(record)
+    return "".join(records)
 
 
 def _strip_preserved_records(groups: str) -> str:
-    pattern = r"<s>.*?</s>|<g>.*?</g>|<v>.*?</v>|<r><v>\d+:.+?</r>"
-    return re.sub(pattern, "", groups, flags=re.DOTALL)
+    return _PRESERVED_RECORD_PATTERN.sub("", groups)
 
 
 def split_groups(groups: str) -> Tuple[Dict[int, Dict[str, str]], Dict[int, List[str]]]:
@@ -160,6 +208,7 @@ def remap_groups(mol: Chem.rdchem.Mol, groups: str, ring_info: tuple) -> str:
     old_ind2agroup, old_ind2rgroup = split_groups(groups)
     new_ind2agroup: Dict[int, Dict] = {}
     internal_ind_map: Dict[int, int] = {}
+    old_to_output: Dict[int, int] = {}
     internal_to_output, output_mol = _canonical_output_order(mol)
 
     for atom in mol.GetAtoms():
@@ -174,6 +223,7 @@ def remap_groups(mol: Chem.rdchem.Mol, groups: str, ring_info: tuple) -> str:
         internal_ind = atom.GetIdx()
         internal_ind_map[old_ind] = internal_ind
         new_ind = internal_to_output.get(internal_ind, internal_ind)
+        old_to_output[old_ind] = new_ind
         group = old_ind2agroup.get(old_ind)
         if group is not None:
             new_ind2agroup[new_ind] = group
@@ -207,7 +257,10 @@ def remap_groups(mol: Chem.rdchem.Mol, groups: str, ring_info: tuple) -> str:
             )
             entry["content"].extend(group_list)
 
-    return get_groups_str(new_ind2agroup, new_ind2rgroup) + _preserved_records(groups)
+    return (
+        get_groups_str(new_ind2agroup, new_ind2rgroup)
+        + _preserved_records(groups, old_to_output)
+    )
 
 
 def carbon_chain_repetition_process(mol, atom_id, desc, is_markush, error_msg=False):

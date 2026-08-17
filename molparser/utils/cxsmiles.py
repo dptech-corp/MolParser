@@ -56,12 +56,12 @@ def _apply_raw_atom_labels(mol: Chem.rdchem.Mol, groups: str) -> None:
             mol.GetAtomWithIdx(atom_idx).SetProp("atomLabel", label)
 
 
-def _apply_sru_sgroup(mol: Chem.rdchem.Mol) -> None:
+def _apply_sru_sgroup(mol: Chem.rdchem.Mol, label: str = "n") -> None:
     if mol.GetNumAtoms() == 0:
         return
     sgroup = Chem.CreateMolSubstanceGroup(mol, "SRU")
     sgroup.SetAtoms(list(range(mol.GetNumAtoms())))
-    sgroup.SetProp("LABEL", "n")
+    sgroup.SetProp("LABEL", label)
     sgroup.SetProp("CONNECT", "HT")
 
 
@@ -73,6 +73,7 @@ def _add_ring_attachments(
     ring_info = mol.GetRingInfo().AtomRings()
     attachments: list[tuple[int, tuple[int, ...]]] = []
     ring_counts: dict[int, int] = {}
+    used_anchor_atoms: set[int] = set()
     rw_mol = Chem.RWMol(mol)
 
     for tag, ring_idx, label in _raw_groups(groups):
@@ -81,21 +82,36 @@ def _add_ring_attachments(
         if ring_idx >= len(ring_info):
             continue
         ring_atoms = tuple(ring_info[ring_idx])
-        if not ring_atoms:
+        substitutable_atoms = tuple(
+            atom_idx
+            for atom_idx in ring_atoms
+            if mol.GetAtomWithIdx(atom_idx).GetNumImplicitHs() > 0
+        )
+        available_atoms = tuple(
+            atom_idx
+            for atom_idx in substitutable_atoms
+            if atom_idx not in used_anchor_atoms
+        )
+        if not available_atoms:
             continue
 
         atom = Chem.Atom(0)
         if label:
             atom.SetProp("atomLabel", label)
         dummy_idx = rw_mol.AddAtom(atom)
-        anchor_idx = ring_atoms[ring_counts.get(ring_idx, 0) % len(ring_atoms)]
+        anchor_idx = available_atoms[
+            ring_counts.get(ring_idx, 0) % len(available_atoms)
+        ]
         ring_counts[ring_idx] = ring_counts.get(ring_idx, 0) + 1
+        used_anchor_atoms.add(anchor_idx)
         rw_mol.AddBond(dummy_idx, anchor_idx, Chem.BondType.SINGLE)
-        attachments.append((dummy_idx, ring_atoms))
+        attachments.append((dummy_idx, substitutable_atoms))
 
     if not attachments:
         return mol, attachments
-    return rw_mol.GetMol(), attachments
+    output = rw_mol.GetMol()
+    Chem.SanitizeMol(output)
+    return output, attachments
 
 
 def _append_cx_fields(cxsmiles: str, fields: list[str]) -> str:
@@ -155,8 +171,10 @@ def _convert_refactored_esmi_to_cxsmiles(
     mol, ring_attachments = _add_ring_attachments(mol, ring_groups)
     _apply_atom_labels(mol, groups)
     _apply_raw_atom_labels(mol, source_groups or groups)
-    if sru or Translator.parse_extension(ext) == "Sg:n":
-        _apply_sru_sgroup(mol)
+    parsed_ext = Translator.parse_extension(ext)
+    if sru or parsed_ext.startswith("Sg:"):
+        label = parsed_ext.split(":", 1)[1] if parsed_ext.startswith("Sg:") else "n"
+        _apply_sru_sgroup(mol, label=label or "n")
 
     params = Chem.SmilesWriteParams()
     params.canonical = not ring_attachments

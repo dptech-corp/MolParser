@@ -2,7 +2,6 @@
 name: molparser-visual-ocsr
 description: "Use for MolParser visual OCSR workflows that parse molecule images or PDFs into E-SMILES/SMILES with MolDet detection and MolParser recognition models."
 ---
-
 # MolParser Visual OCSR Skill
 
 Use this skill when extracting molecular structures from images, PDFs, URLs, or mixed input lists with `molparser.MolParser`.
@@ -39,20 +38,6 @@ For high-throughput molecule crops:
 ```python
 parser = MolParser(device="cuda", molparser_batch_size=1024)
 results = parser.parse(["mol_001.png", "mol_002.png"], rec_only=True)
-```
-
-## Model Download Policy
-
-- Local paths win when configured.
-- Hugging Face is tried first when the HF model ID is set.
-- If Hugging Face fails and the ModelScope ID is set, automatically fall back to ModelScope.
-- Default MolDet files are `moldet_v2_yolo11n_640_general.pt` for image detection and `moldet_v2_yolo11n_960_doc.pt` for PDF page detection.
-- Use environment variables for proxy and private tokens:
-
-```bash
-export HTTP_PROXY=100.68.165.249:3128
-export HTTPS_PROXY=100.68.165.249:3128
-export HF_TOKEN=hf_xxx
 ```
 
 ## Output Fields
