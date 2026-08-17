@@ -205,9 +205,7 @@ print(result)
 
 ### Render E-SMILES
 
-Render E-SMILES as SVG or PNG. Existing SMILES/E-SMILES 1.0 captions retain the original drawing defaults; SRU brackets, local `<g>` brackets, skeletal single-CH2 repeats, empty-name/multiple virtual arcs, and approved endpoint balls are enabled only when their syntax is present.
-
-#### Baseline rendering
+#### Render E-SMILES as SVG or PNG
 
 Call the standard `draw` function with the raw E-SMILES. Use `output_format="svg"` for editable vector output or `"png"` for raster output.
 
@@ -223,9 +221,28 @@ png_bytes = mutils.draw(raw, output_format="png")
 Path("molecule.png").write_bytes(png_bytes)
 ```
 
+#### Rendered example
+
+###### Markush structures
+
+```text
+*C(O)c1cc(C(=O)N(*)*)cc(-c2*ccc*2)c1<sep><a>0:CF3</a><a>9:R[3]</a><a>10:R[2]</a><a>14:X</a><a>18:Y</a><r>1:R[1]?1-3</r>
+```
+
 ![Baseline E-SMILES rendering](skills/molparser-extended-smiles/assets/images/readme_molecule.svg)
 
-#### VirtualArc with an attached group
+###### Macrocyclic structures
+
+For macrocyclic structures, the renderer automatically applies layout optimization.
+
+```text
+C[C@@H](O)[C@H]1N*(=O)[C@@H](CCCCN)NC(=O)CNC(=O)CNC(=O)[C@H](CC(N)=O)NC(=O)[C@H](CCC(=O)O)NC(=O)[C@H](C)N(C)C(=O)[C@@H](Cc2c[nH]c3ccccc23)NC(=O)[C@H](CS)NC(=O)[C@@H](Cc2ccccc2)NC(=O)[C@H](CCCCN)NC(=O)[C@H](CCCNC(=N)N)NC(=O)[C@H](Cc2ccc(O)cc2)NC(=O)[C@H](CCC(N)=O)NC1=O<sep><a>5:X</a>
+```
+
+![Large stereochemical atom-Markush rendering](skills/molparser-extended-smiles/assets/images/macrocyclic-peptide-markush-x.svg)
+
+
+###### VirtualArc with an attached group (new in E-SMILES2.0 spec)
 
 ```text
 C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
@@ -233,7 +250,7 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 
 ![VirtualArc rendering](skills/molparser-extended-smiles/assets/images/virtual_arc_with_r3.svg)
 
-#### Colored endpoint balls
+###### Colored endpoint balls (new in E-SMILES2.0 spec)
 
 ```text
 *CC(=O)Nc1c(C#N)c(*)nn1C*<sep><a>0:<id>[blue]</a><a>10:<id>[green]</a><a>14:<id>[green]</a>
@@ -241,7 +258,7 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 
 ![Fixed-color endpoint balls rendering](skills/molparser-extended-smiles/assets/images/endpoint-balls-blue-green-green.svg)
 
-#### SRU
+###### SRU / Polymer (new in E-SMILES2.0 spec)
 
 ```text
 *OCCOC(=O)c1ccc(C(*)=O)cc1<sep><d>0:<dum></d><d>12:<dum></d>|Sg:n|
@@ -255,15 +272,6 @@ CC(=O)NCOCCC1CC1<sep><g>[5:4]:[6:7]:|Sg:n|</g>
 
 ![Local s-group repeat rendering](skills/molparser-extended-smiles/assets/images/sgroup-local-ether-repeat-n.svg)
 
-#### Macrocyclic structures
-
-For macrocyclic structures, the renderer automatically applies layout optimization.
-
-```text
-C[C@@H](O)[C@H]1N*(=O)[C@@H](CCCCN)NC(=O)CNC(=O)CNC(=O)[C@H](CC(N)=O)NC(=O)[C@H](CCC(=O)O)NC(=O)[C@H](C)N(C)C(=O)[C@@H](Cc2c[nH]c3ccccc23)NC(=O)[C@H](CS)NC(=O)[C@@H](Cc2ccccc2)NC(=O)[C@H](CCCCN)NC(=O)[C@H](CCCNC(=N)N)NC(=O)[C@H](Cc2ccc(O)cc2)NC(=O)[C@H](CCC(N)=O)NC1=O<sep><a>5:X</a>
-```
-
-![Large stereochemical atom-Markush rendering](skills/molparser-extended-smiles/assets/images/macrocyclic-peptide-markush-x.svg)
 
 See the [E-SMILES Figure Guide](skills/molparser-extended-smiles/figure-index.md) for the complete, consistently formatted visual example set.
 

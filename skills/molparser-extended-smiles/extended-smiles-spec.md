@@ -162,7 +162,7 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><g>[3:2]:[4:5]:|Sg:20|</g>
 
 The current token set does not encode:
 
-- coordination or dative bond semantics beyond ordinary SMILES support;
+- coordination or dative-bond semantics beyond the representational scope of standard SMILES (e.g., metal complexes);
 - electron-transfer arrows;
 - uncertain bond styles;
 - uncertain chirality.

@@ -1440,21 +1440,7 @@ def substitute_markush(
     repeat_policy: RepeatPolicy = "best_effort",
     terminal_policy: TerminalPolicy = "preserve",
 ) -> str | list[str]:
-    """Substitute Markush definitions into an E-SMILES caption.
-
-    ``definitions`` maps labels such as ``R1`` or ``R[1]`` to either an
-    abbreviation (``Me``) or a SMILES fragment. If the fragment contains ``*``,
-    that atom is treated as the attachment point and removed during merging.
-    Ring-indexed groups are expanded over possible ring attachment positions.
-
-    ``repeat_policy="best_effort"`` physically expands unambiguous concrete
-    Whole-SRU and local ``<g>`` repeats. A fully resolved branch is returned as
-    RDKit-valid plain SMILES; a branch with residual annotations remains
-    E-SMILES. ``"preserve"`` keeps repeat annotations, while ``"strict"``
-    rejects an active repeat that cannot be expanded without guessing.
-    ``terminal_policy="hydrogen"`` caps consumed terminal dummy atoms with
-    implicit hydrogens; the default retains terminal ``*`` atoms.
-    """
+    """Substitute Markush definitions into an E-SMILES caption."""
     if (
         isinstance(max_outputs, bool)
         or not isinstance(max_outputs, int)
