@@ -86,6 +86,21 @@ def _resolve_group_smiles(
     src = chem_utils.get_abbrev_smi().get(lookup_symbol)
     if src is not None:
         return [src]
+
+    oxygen_markush = None
+    if desc.symbol == "OR" and desc.script and desc.script.isdigit():
+        oxygen_markush = f"R{desc.script}"
+    elif desc.script is None:
+        matched = re.fullmatch(r"OR(\d+)", desc.symbol or "")
+        if matched is not None:
+            oxygen_markush = f"R{matched.group(1)}"
+    if oxygen_markush is not None:
+        value = definition_lookup.get(oxygen_markush)
+        if value is not None:
+            return [
+                _add_oxygen_linker(_resolve_fragment_smiles(v))
+                for v in _as_values(value)
+            ]
     return []
 
 
@@ -340,6 +355,27 @@ def _source_attachment(src_mol: Chem.rdchem.Mol) -> tuple[int, int | None]:
     if len(neighbors) != 1:
         raise ValueError("Substituent `*` attachment atom must have exactly one neighbor")
     return neighbors[0].GetIdx(), dummy.GetIdx()
+
+
+def _add_oxygen_linker(fragment_smiles: str) -> str:
+    """Insert oxygen between the parent attachment and an R-group fragment."""
+    fragment = Chem.MolFromSmiles(fragment_smiles)
+    if fragment is None:
+        raise ValueError(f"Invalid substituent SMILES: {fragment_smiles}")
+    attach_idx, dummy_idx = _source_attachment(fragment)
+    editable = Chem.RWMol(fragment)
+    if dummy_idx is None:
+        oxygen_idx = editable.AddAtom(Chem.Atom("O"))
+        editable.AddBond(oxygen_idx, attach_idx, Chem.BondType.SINGLE)
+    else:
+        editable.ReplaceAtom(dummy_idx, Chem.Atom("O"))
+        oxygen_idx = dummy_idx
+        bond = editable.GetBondBetweenAtoms(oxygen_idx, attach_idx)
+        bond.SetBondType(Chem.BondType.SINGLE)
+    external_idx = editable.AddAtom(Chem.Atom("*"))
+    editable.AddBond(external_idx, oxygen_idx, Chem.BondType.SINGLE)
+    Chem.SanitizeMol(editable)
+    return Chem.MolToSmiles(editable, canonical=True, isomericSmiles=True)
 
 
 def _copy_fragment(
