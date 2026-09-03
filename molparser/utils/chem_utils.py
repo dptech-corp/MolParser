@@ -46,7 +46,8 @@ def get_mol(smi: str) -> Chem.rdchem.Mol:
 
 
 _PRESERVED_RECORD_PATTERN = re.compile(
-    r"<s>.*?</s>|<g>.*?</g>|<r><v>\d+:.+?</r>|<v>.*?</v>|<c>.*?</c>",
+    r"<s>.*?</s>|<g>.*?</g>|<r><v>\d+:.+?</r>|<v>.*?</v>|"
+    r"<c>.*?</c>|<x>.*?</x>",
     re.DOTALL,
 )
 _PORT_PAIR_PATTERN = re.compile(r"\[(?P<left>\d+):(?P<right>\d+)\]")
@@ -77,7 +78,7 @@ def _preserved_records(
     records: List[str] = []
     for match in _PRESERVED_RECORD_PATTERN.finditer(groups):
         record = match.group(0)
-        if record.startswith("<g>") or record.startswith("<v>"):
+        if record.startswith(("<g>", "<v>", "<x>")):
             record = _PORT_PAIR_PATTERN.sub(remap_pair, record)
         elif record.startswith("<c>") and atom_index_map is not None:
             indexed = _ATOM_RECORD_INDEX_PATTERN.search(record)

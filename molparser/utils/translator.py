@@ -126,6 +126,8 @@ class Tokens:
     special_id = "<id>"
     ring_start = "<r>"
     ring_end = "</r>"
+    axial_start = "<x>"
+    axial_end = "</x>"
     dummy = "<dum>"
     separator = "<sep>"
 
@@ -267,7 +269,8 @@ class Translator:
         seq = re.sub(
             rf"{Tokens.substruct_start}.*?{Tokens.substruct_end}|"
             rf"{Tokens.sgroup_start}.*?{Tokens.sgroup_end}|"
-            rf"{Tokens.virtual_start}.*?{Tokens.virtual_end}",
+            rf"{Tokens.virtual_start}.*?{Tokens.virtual_end}|"
+            rf"{Tokens.axial_start}.*?{Tokens.axial_end}",
             "",
             seq,
             flags=re.DOTALL,
@@ -354,6 +357,7 @@ class Translator:
             rf"{Tokens.substruct_start}.*?{Tokens.substruct_end}|"
             rf"{Tokens.sgroup_start}.*?{Tokens.sgroup_end}|"
             rf"{Tokens.virtual_start}.*?{Tokens.virtual_end}|"
+            rf"{Tokens.axial_start}.*?{Tokens.axial_end}|"
             rf"{Tokens.ring_start}{Tokens.virtual_start}\d+:.+?{Tokens.ring_end}",
             re.DOTALL,
         )
@@ -579,6 +583,7 @@ class Translator:
                     Tokens.substruct_start,
                     Tokens.sgroup_start,
                     Tokens.virtual_start,
+                    Tokens.axial_start,
                     f"{Tokens.ring_start}{Tokens.virtual_start}",
                 )
             )

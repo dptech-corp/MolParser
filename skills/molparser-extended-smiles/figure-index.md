@@ -17,7 +17,8 @@ Use this guide after `extended-smiles-spec.md` when a visual example is needed. 
 9. Use `<g>` for an s-group repeat with `[INNER_PORT:OUTER_PORT]` pairs and `|Sg:COUNT|`.
 10. Use `?n`, `?1-3`, or `?3` for local substructure multiplicity.
 11. Use top-level `|Sg:COUNT|` for a whole structural repeating unit.
-12. Do not invent tokens for unsupported chemistry. Preserve the encodable backbone and report the unsupported feature separately.
+12. Use `<x>[ATOM_1:ATOM_2]:Ra</x>` or `:Sa</x>` for a biphenyl stereogenic axis; use the directly bonded aromatic axis atoms in ascending index order.
+13. Do not invent tokens for unsupported chemistry. Preserve the encodable backbone and report the unsupported feature separately.
 
 ## Encoding and Rendering Examples
 

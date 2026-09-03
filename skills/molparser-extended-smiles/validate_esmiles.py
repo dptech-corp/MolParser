@@ -10,6 +10,7 @@ Supported extension records:
   - <s>[SUBSTRUCTURE_ESMILES]</s>
   - <g>[INNER_PORT:OUTER_PORT]:...:|Sg:n|</g>
   - <v>[VIRTUALARC_INDEX]:[VIRTUALARC_NAME]:[FROM_ATOM:TO_ATOM]</v>
+  - <x>[ATOM_1:ATOM_2]:[STATE]</x> (biphenyl axial chirality)
   - |Sg:n| (structural repeating unit marker)
 
 Notes:
@@ -42,6 +43,9 @@ RING_VIRTUAL_V_RE = re.compile(
 VIRTUAL_ARC_RE = re.compile(
     r"^(?P<index>\d+):(?P<name>[^:]*):\[(?P<from>\d+):(?P<to>\d+)\]$",
     re.DOTALL,
+)
+AXIAL_RE = re.compile(
+    r"^\[(?P<first>\d+):(?P<second>\d+)\]:(?P<state>Ra|Sa)$"
 )
 PORT_RE = re.compile(r"\[(?P<inner>\d+):(?P<outer>\d+)\]")
 PORT_PREFIX_RE = re.compile(r"^(?:\[\d+:\d+\]:)+$")
@@ -285,6 +289,28 @@ def _validate_virtual_arc(
     return match
 
 
+def _validate_axial(body: str, messages: list[Message], mol=None) -> None:
+    match = AXIAL_RE.fullmatch(body.strip())
+    if match is None:
+        add(
+            messages,
+            "error",
+            "<x> should use [ATOM_1:ATOM_2]:Ra or [ATOM_1:ATOM_2]:Sa",
+        )
+        return
+    first, second = int(match.group("first")), int(match.group("second"))
+    if first >= second:
+        add(messages, "error", "<x> requires ATOM_1 < ATOM_2")
+    if mol is None or first >= mol.GetNumAtoms() or second >= mol.GetNumAtoms():
+        if mol is not None:
+            add(messages, "error", "<x> atom index is outside the base molecule")
+        return
+    if mol.GetBondBetweenAtoms(first, second) is None:
+        add(messages, "error", "<x> axis atoms must be directly bonded")
+    if not all(mol.GetAtomWithIdx(index).GetIsAromatic() for index in (first, second)):
+        add(messages, "error", "<x> axis atoms must both be aromatic")
+
+
 def validate(esmiles: str, strict: bool = False) -> list[Message]:
     messages: list[Message] = []
     text = str(esmiles).strip()
@@ -314,7 +340,7 @@ def validate(esmiles: str, strict: bool = False) -> list[Message]:
     ring_count = len(mol.GetRingInfo().AtomRings()) if mol is not None else None
 
     if extension:
-        for tag in ("a", "d", "r", "c", "s", "g", "v"):
+        for tag in ("a", "d", "r", "c", "s", "g", "v", "x"):
             opens = len(re.findall(fr"<{tag}>", extension))
             if tag == "c":
                 # In <r><c>[INDEX]:[VALUE]</r>, <c> is an inline target marker
@@ -372,6 +398,10 @@ def validate(esmiles: str, strict: bool = False) -> list[Message]:
         )
         if parsed_arc is not None:
             virtual_arc_matches.append(parsed_arc)
+
+    for match in re.finditer(r"<x>(?P<body>.*?)</x>", top_extension, re.DOTALL):
+        spans.append(match.span())
+        _validate_axial(match.group("body"), messages, mol=mol)
 
     if virtual_arc_matches:
         arc_ids = [int(match.group("index")) for match in virtual_arc_matches]
