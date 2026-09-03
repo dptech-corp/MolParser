@@ -90,6 +90,25 @@ Example:
 C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 ```
 
+### Biphenyl Axial Chirality
+
+```text
+<x>[ATOM_1:ATOM_2]:[STATE]</x>
+```
+
+- `ATOM_1` and `ATOM_2` are the zero-based atoms at the two ends of the
+  stereogenic biaryl axis.
+- The atoms must be directly bonded, aromatic, and written with
+  `ATOM_1 < ATOM_2`.
+- `STATE` is `Ra` or `Sa`. Atom order is not reversed to change the state.
+- Normalized E-SMILES preserves this record and remaps both atom indexes after
+  abbreviation substitution or canonicalization. Plain SMILES output ignores
+  the annotation; current utilities do not assign RDKit axial stereochemistry.
+
+```text
+Nc1ccc2ccccc2c1-c1c(O)ccc2ccccc12<sep><x>[10:11]:Sa</x>
+```
+
 ## 3. Multiplicity And Structural Repetition
 
 Use a suffix on a group label for local substructure multiplicity:
@@ -155,7 +174,7 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><g>[3:2]:[4:5]:|Sg:20|</g>
   in the Markush definition dictionary. Non-ball notes render as text, while
   only approved values on `*` in Section 4 render as endpoint balls.
 - Pre-compatible `<s>` records are preserved in `groups`; `substitute_markush` can substitute labels inside one single-level substructure record and return the result as an E-SMILES annotation, without attaching or expanding it into the main molecule. An `<s>` nested inside another `<s>` is outside the supported grammar and is rejected.
-- Pre-compatible `<s>` and under-specified `<g>`, `<v>`, or `<r><v>...` portions remain in `groups`. When other substitutions reorder the outer graph, retained `<g>` ports, `<v>` endpoints, and `<c>` atom indices are remapped; if an endpoint was removed, best-effort mode rolls back that branch instead of emitting a stale index. A symbolic `<g>` count may resolve to one positive integer even when its graph remains residual.
+- Pre-compatible `<s>` and under-specified `<g>`, `<v>`, `<x>`, or `<r><v>...` portions remain in `groups`. When other substitutions reorder the outer graph, retained `<g>` ports, `<v>` endpoints, `<x>` axis atoms, and `<c>` atom indices are remapped; if an endpoint was removed, best-effort mode rolls back that branch instead of emitting a stale index. A symbolic `<g>` count may resolve to one positive integer even when its graph remains residual.
 - `draw` renders SMILES or E-SMILES to SVG/PNG for visual QA, including SRU and local-repeat brackets, virtual arcs, and approved MolParser endpoint-ball labels.
 
 ## 6. Unsupported Chemistry
@@ -165,15 +184,16 @@ The current token set does not encode:
 - coordination or dative-bond semantics beyond the representational scope of standard SMILES (e.g., metal complexes);
 - electron-transfer arrows;
 - uncertain bond styles;
-- uncertain chirality.
+- uncertain chirality and non-biphenyl axial chirality.
 
 Preserve the encodable backbone, do not invent tokens, and report unencoded chemistry explicitly.
 
 ## 7. Validation Checklist
 
 - at least one top-level `<sep>`; nested `<s>` records may contain their own `<sep>`;
-- balanced `<a>`, `<d>`, `<r>`, `<c>`, `<s>`, `<g>`, and `<v>` tags, allowing inline `<r><v>...</r>`;
+- balanced `<a>`, `<d>`, `<r>`, `<c>`, `<s>`, `<g>`, `<v>`, and `<x>` tags, allowing inline `<r><v>...</r>`;
 - non-negative indexes in the correct namespace;
+- `<x>` uses two directly bonded aromatic atom indexes in ascending order and a `Ra` or `Sa` state;
 - no whitespace inside group labels;
 - special labels use exactly `<a>[ATOM_INDEX]:<id>[NOTE]</a>` with a non-empty,
   whitespace-free `NOTE` that contains no `]` and has no `?` multiplicity

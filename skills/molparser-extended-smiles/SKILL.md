@@ -19,6 +19,7 @@ Use this skill when reading, writing, validating, normalizing, or rendering MolP
    - `<d>[ATOM_INDEX]:<dum></d>`: explicit dummy attachment point. This is the E-SMILES 2.0 form; legacy `<a>[ATOM_INDEX]:<dum></a>` is still accepted.
    - `<v>[VIRTUALARC_INDEX]:[VIRTUALARC_NAME]:[FROM_ATOM:TO_ATOM]</v>`: pre-compatible virtualArc annotation for a special abstract ring; the name field may be empty.
    - `<r><v>[VIRTUALARC_INDEX]:[GROUP_LABEL]</r>`: pre-compatible substituent attached to a virtualArc.
+   - `<x>[ATOM_1:ATOM_2]:[STATE]</x>`: biphenyl axial chirality, where the directly bonded aromatic axis atoms satisfy `ATOM_1 < ATOM_2` and `STATE` is `Ra` or `Sa`.
    - `<s>[SUBSTRUCTURE_ESMILES]</s>`: pre-compatible nested substructure record for ring-external repeat fragments.
    - `<g>[INNER_PORT:OUTER_PORT]:...:|Sg:n|</g>`: pre-compatible s-group repeat record.
    - `?n`, `?1-3`, `?3`: local substructure multiplicity suffix on a group label.
@@ -46,6 +47,9 @@ result = mutils.postprocess_caption(raw_esmiles)
 
 - Use `result["esmi"]` for normalized E-SMILES output.
 - Use `result["cxsmiles"]` when CXSMILES output is needed.
+- Axial chirality `<x>` is retained in `result["esmi"]`, with both axis atom
+  indexes remapped after abbreviation substitution and canonicalization.
+  `result["smi"]` ignores this annotation and remains ordinary SMILES.
 
 ## Markush Definition Substitution
 
@@ -114,11 +118,12 @@ Markush expansion.
 - Nested `<s>` records may contain an additional `<sep>` for the substructure E-SMILES.
 - `<a>` indexes atoms; `<d>` indexes explicit dummy attachment points; `<r>` indexes rings; `<c>` indexes the dummy atom carrying the abstract-ring label.
 - `<v>` indexes virtualArc annotations in a separate namespace; `<r><v>0:R[3]</r>` attaches an unresolved group to virtualArc `0`.
+- `<x>[ATOM_1:ATOM_2]:Ra</x>` and `<x>[ATOM_1:ATOM_2]:Sa</x>` identify the directly bonded aromatic atoms defining a biphenyl stereogenic axis. Both indexes use the base-SMILES atom namespace and must be written in ascending order.
 - A virtualArc name may be empty. For new datasets, emit canonical endpoint pairs with `start < end`, sort multiple pairs lexicographically, assign consecutive ids, and rebind `<r><v>` references; continue accepting legacy reversed endpoints when reading.
 - `<g>` port pairs use `[INNER_PORT:OUTER_PORT]`; repeat count defaults to `n` and may be explicit, e.g. `|Sg:20|`.
 - `GROUP_LABEL` may be a common abbreviation (`Me`, `OMe`, `CF3`) or a Markush label (`R[1]`). Use `<id>[NOTE]` only as an atom-indexed `<a>` payload, with a non-empty, whitespace-free `NOTE` that contains no `]` and has no multiplicity suffix. Endpoint-ball rendering on `*` is only a visual treatment of approved `<id>` values; it is not a separate token or chemical identity. For dummy attachment points, prefer `<d>[ATOM_INDEX]:<dum></d>` and accept legacy `<a>[ATOM_INDEX]:<dum></a>`.
 - Use local substructure multiplicity suffixes (`?n`, `?1-3`, `?3`) separately from SRU-level `|Sg:n|`.
-- After canonicalization or abbreviation substitution, remap supported retained `<g>`, `<v>`, and atom/ring annotations. If a resolved substitution removes an endpoint needed by a retained annotation, best-effort mode rolls that branch back instead of emitting a silently corrupted record.
+- After canonicalization or abbreviation substitution, remap supported retained `<g>`, `<v>`, `<x>`, and atom/ring annotations. If a resolved substitution removes an endpoint needed by a retained annotation, best-effort mode rolls that branch back instead of emitting a silently corrupted record.
 
 ## Boundary Policy
 
