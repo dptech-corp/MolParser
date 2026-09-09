@@ -326,6 +326,15 @@ Huggingface Homepage: [UniParser/molparser](https://huggingface.co/collections/U
 }
 ```
 
+```bibtex
+@article{fang2026molparserm,
+  title={MolParser-Mobile: Ultrafast OCSR System for Large-Scale Chemical Literature Mining},
+  author={Fang, Xi and Lu, Haocheng and Lyu, Han and Luo, Chengxiang and Zhang, Linfeng and Ke, Guolin},
+  journal={arXiv preprint arXiv:2609.05807},
+  year={2026}
+}
+```
+
 ## License
 
 The project code is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details. Apache 2.0 permits **commercial use**, modification, and distribution, **provided that the license and copyright notices are retained**.
