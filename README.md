@@ -336,7 +336,7 @@ The project code is licensed under the Apache License 2.0. See [LICENSE](LICENSE
 
 For commercial use, we recommend **Uni-Parser**, a professional chemical PDF parsing framework that integrates a more powerful version of MolParser for high-precision molecular structure recognition. It supports both **PDF document parsing** and **molecular image snippets (snips)** as direct inputs.
 
-* **Uni-Parser:** [https://uniparser.dp.tech/](https://uniparser.dp.tech/?utm_source=chatgpt.com)
-* **API Examples & Tools & Skills:** [UniParser-Tools](https://github.com/dptech-corp/UniParser-Tools?utm_source=chatgpt.com)
+* **Uni-Parser:** [https://uniparser.dp.tech/](https://uniparser.dp.tech)
+* **API Examples & Tools & Skills:** [UniParser-Tools](https://github.com/dptech-corp/UniParser-Tools)
 
 Please refer to **UniParser-Tools** for API usage, batch processing, and integration examples.
