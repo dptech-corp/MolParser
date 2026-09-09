@@ -331,3 +331,12 @@ Huggingface Homepage: [UniParser/molparser](https://huggingface.co/collections/U
 The project code is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details. Apache 2.0 permits **commercial use**, modification, and distribution, **provided that the license and copyright notices are retained**.
 
 **Model weights, datasets, and third-party dependencies used with this project are subject to their respective licenses. Please review and comply with those licenses when using them.**
+
+## Commercial API
+
+For commercial use, we recommend **Uni-Parser**, a professional chemical PDF parsing framework that integrates a more powerful version of MolParser for high-precision molecular structure recognition. It supports both **PDF document parsing** and **molecular image snippets (snips)** as direct inputs.
+
+* **Uni-Parser:** [https://uniparser.dp.tech/](https://uniparser.dp.tech/?utm_source=chatgpt.com)
+* **API Examples & Tools & Skills:** [UniParser-Tools](https://github.com/dptech-corp/UniParser-Tools?utm_source=chatgpt.com)
+
+Please refer to **UniParser-Tools** for API usage, batch processing, and integration examples.
