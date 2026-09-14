@@ -12,6 +12,37 @@ from rdkit import Chem
 
 
 _ABBREV_CSV = Path(__file__).parent / "abbrevs_example.csv"
+_IONIC_MONOVALENT_METALS = frozenset({"Li", "Na", "K"})
+
+
+def normalize_ionic_smiles(smiles: str) -> str:
+    """Charge neutral O-alkali bonds as an ionic salt when unambiguous."""
+    mol = Chem.MolFromSmiles(str(smiles))
+    if mol is None:
+        return str(smiles)
+    editable = Chem.RWMol(mol)
+    changed = False
+    for bond in editable.GetBonds():
+        if bond.GetBondType() != Chem.BondType.SINGLE:
+            continue
+        begin, end = bond.GetBeginAtom(), bond.GetEndAtom()
+        if begin.GetSymbol() not in _IONIC_MONOVALENT_METALS and end.GetSymbol() not in _IONIC_MONOVALENT_METALS:
+            continue
+        oxygen = begin if begin.GetSymbol() == "O" else end if end.GetSymbol() == "O" else None
+        metal = begin if begin.GetSymbol() in _IONIC_MONOVALENT_METALS else end if end.GetSymbol() in _IONIC_MONOVALENT_METALS else None
+        if oxygen is None or metal is None:
+            continue
+        if oxygen.GetFormalCharge() == 0 and metal.GetFormalCharge() == 0:
+            oxygen.SetFormalCharge(-1)
+            metal.SetFormalCharge(1)
+            changed = True
+    if not changed:
+        return str(smiles)
+    try:
+        Chem.SanitizeMol(editable)
+        return Chem.MolToSmiles(editable, canonical=True, isomericSmiles=True)
+    except Exception:
+        return str(smiles)
 
 
 class UnmappableAnnotationError(ValueError):
@@ -27,7 +58,7 @@ def _load_abbrev_smi() -> Dict[str, str]:
             smiles = row.get("smiles")
             if symbol is None or smiles is None:
                 continue
-            mapping[symbol] = smiles
+            mapping[symbol] = normalize_ionic_smiles(smiles)
     return mapping
 
 
@@ -323,6 +354,7 @@ __all__ = [
     "alter_atom",
     "carbon_chain_repetition_process",
     "get_abbrev_smi",
+    "normalize_ionic_smiles",
     "get_groups_str",
     "get_mol",
     "is_single_bond",
