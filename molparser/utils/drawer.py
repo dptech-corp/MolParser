@@ -17,6 +17,7 @@ from rdkit.Chem.rdchem import Mol
 from rdkit.Geometry import Point2D
 
 try:
+    from . import chem_utils
     from .translator import (
         AtomIndex,
         GroupDesc,
@@ -26,6 +27,7 @@ try:
         Tokens,
     )
 except ImportError:  # Support running from the package directory as working directory.
+    import chem_utils
     from translator import (
         AtomIndex,
         GroupDesc,
@@ -1309,7 +1311,7 @@ class _DrawingTranslator:
     @classmethod
     def _preserve_stereochemistry(cls, original_smiles: str, mol: Mol) -> None:
         try:
-            stereo_mol = Chem.MolFromSmiles(original_smiles, sanitize=False)
+            stereo_mol = chem_utils.parse_smiles(original_smiles, sanitize=False)
             if stereo_mol is None:
                 return
             if stereo_mol.GetNumAtoms() != mol.GetNumAtoms():
@@ -1347,7 +1349,7 @@ class _DrawingTranslator:
 
         if error_msg:
             RDLogger.EnableLog("rdApp.*")
-        mol = Chem.MolFromSmiles(smi)
+        mol = chem_utils.parse_smiles(smi)
         RDLogger.DisableLog("rdApp.*")
         if mol is None:
             if error_msg:
@@ -2258,7 +2260,7 @@ def draw(
             config=drawing_config,
         )
     else:
-        mol = Chem.MolFromSmiles(smi)
+        mol = chem_utils.parse_smiles(smi)
         if mol is None:
             raise ValueError(f"Invalid SMILES: {smi}")
         drawing = _DrawingTranslator.reconstruct_mol(

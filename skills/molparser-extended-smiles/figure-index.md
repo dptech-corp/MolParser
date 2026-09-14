@@ -1,6 +1,6 @@
 # E-SMILES Figure Guide
 
-Use this guide after `extended-smiles-spec.md` when a visual example is needed. Every example follows the same order: encoding guidance, raw E-SMILES, then the corresponding rendering.
+Use this guide after `extended-smiles-spec.md` when a visual example is needed. Examples contain encoding guidance, raw E-SMILES, and a rendering or an explicitly identified source figure.
 
 ## Model Writing Rules
 
@@ -13,11 +13,11 @@ Use this guide after `extended-smiles-spec.md` when a visual example is needed. 
 5. Use `<r>` when a substituent belongs to a ring but its exact attachment atom is unspecified.
 6. Use `<c>` for an abstract-ring or superatom label carried by a dummy atom.
 7. Use `<v>` for a virtualArc and `<r><v>...</r>` for a group attached to that virtualArc.
-8. Use one level of `<s>` for a nested substructure record outside the main ring system.
+8. The repository compatibility extension `<s>` supports one level of nested substructure records outside the main ring system.
 9. Use `<g>` for an s-group repeat with `[INNER_PORT:OUTER_PORT]` pairs and `|Sg:COUNT|`.
 10. Use `?n`, `?1-3`, or `?3` for local substructure multiplicity.
 11. Use top-level `|Sg:COUNT|` for a whole structural repeating unit.
-12. Use `<x>[ATOM_1:ATOM_2]:Ra</x>` or `:Sa</x>` for a biphenyl stereogenic axis; use the directly bonded aromatic axis atoms in ascending index order.
+12. Use `<x>[ATOM_1:ATOM_2]:Ra</x>` or `:Sa</x>` for a biaryl stereogenic axis; use the directly bonded aromatic axis atoms in ascending index order.
 13. Do not invent tokens for unsupported chemistry. Preserve the encodable backbone and report the unsupported feature separately.
 
 ## Encoding and Rendering Examples
@@ -47,9 +47,10 @@ Use `<a>[ATOM_INDEX]:[GROUP_LABEL]</a>` when the substituent is anchored to a kn
 Use `<d>[ATOM_INDEX]:<dum></d>` to retain an explicit connection point.
 
 ```text
-*C(O)=O<sep><d>0:<dum></d>  # in E-SMILES 2.0
-# *C(O)=O<sep><a>0:<dum></a>  # in E-SMILES 1.0
+*C(O)=O<sep><d>0:<dum></d>
 ```
+
+Legacy E-SMILES 1.0 input may use `<a>0:<dum></a>` instead.
 
 ![Dummy attachment point rendering](assets/images/03-connection-point.png)
 
@@ -123,18 +124,20 @@ Use `<c>[ATOM_INDEX]:[RING_LABEL]</c>` for an abstract ring or superatom carried
 
 ### 10. Whole SRU with explicit terminal dummies
 
-Use top-level `|Sg:n|` for a whole repeat. 
+Use top-level `|Sg:n|` for a whole repeat. This symbolic whole-repeat example
+has `sru=True`; a numeric count or range would not set that classification flag.
 
 ```text
-*OCCOC(=O)c1ccc(C(*)=O)cc1<sep><d>0:<dum></d><d>12:<dum></d>|Sg:n|  # in E-SMILES 2.0
-# *OCCOC(=O)c1ccc(C(*)=O)cc1<sep>|Sg:n|  # in E-SMILES 1.0
+*OCCOC(=O)c1ccc(C(*)=O)cc1<sep><d>0:<dum></d><d>12:<dum></d>|Sg:n|
 ```
+
+Legacy E-SMILES 1.0 input may omit the explicit `<d>` records.
 
 ![Whole SRU with explicit terminal dummies rendering](assets/images/whole-sru-aromatic-ester-n.svg)
 
 ### 11. Local s-group repeat
 
-Use `<g>[INNER_PORT:OUTER_PORT]:...:|Sg:COUNT|</g>` to identify the repeated local subgraph and its boundary bonds.
+Use `<g>[INNER_PORT:OUTER_PORT]:...:|Sg:COUNT|</g>` to identify the repeated local subgraph and its boundary bonds. A local repeat does not set the whole-molecule `sru` flag, even when its count is symbolic.
 
 ```text
 CC(=O)NCOCCC1CC1<sep><g>[5:4]:[6:7]:|Sg:n|</g>
@@ -144,13 +147,38 @@ CC(=O)NCOCCC1CC1<sep><g>[5:4]:[6:7]:|Sg:n|</g>
 
 ### 12. VirtualArc with an attached group
 
-Use `<v>[ARC_ID]:[NAME]:[SMALL_ATOM_ID:LARGE_ATOM_ID]</v>` for a virtual ring closure. Add `<r><v>[ARC_ID]:[GROUP_LABEL]</r>` when a group is attached to the arc. Keep new endpoint pairs in ascending order.
+Use `<v>[ARC_ID]:[NAME]:[FROM_ATOM:TO_ATOM]</v>` for an abstract virtual connection; it does not add a chemical bond. Add `<r><v>[ARC_ID]:[GROUP_LABEL]</r>` when a group is attached to the arc. Ascending endpoint order is the repository's normalization convention.
 
 ```text
 C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 ```
 
 ![VirtualArc with attached group rendering](assets/images/virtual_arc_with_r3.svg)
+
+### 13. Biaryl axial chirality
+
+The supplied source figure explicitly marks the axis as `aR`, encoded as
+`<x>[7:8]:Ra</x>`. The two indexes identify directly bonded aromatic atoms and
+must be ascending. Use the source's absolute configuration annotation; do not
+infer `Ra` or `Sa` from the page orientation. The tetrahedral center's `@@`
+annotation is separate from the axial `<x>` record.
+
+```text
+*c1cc(CO*)c(-c2ccc(O*)cc2[C@@H](*)O)c(*)c1*<sep><a>0:OMe</a><a>6:TES</a><a>13:TIPS</a><a>17:R[1]</a><a>20:OMe</a><a>22:OMe</a><x>[7:8]:Ra</x>
+```
+
+![Source figure with an aR biaryl axis](assets/images/biaryl-axial-ra-source.png)
+
+This example is Markush because it contains `R[1]`, not because it has an
+axis annotation. An otherwise fully specified structure with only `<x>` has
+`markush=False`, for example:
+
+```text
+Nc1ccc2ccccc2c1-c1c(O)ccc2ccccc12<sep><x>[10:11]:Sa</x>
+```
+
+In both cases the `<x>` record is retained and its indexes are remapped in
+normalized `esmi`. Plain `smi` does not encode this axial annotation.
 
 ## Unsupported or Ambiguous Source Features
 

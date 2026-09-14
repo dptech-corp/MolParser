@@ -198,7 +198,7 @@ class Translator:
     @classmethod
     def canonicalize_smiles(cls, smi: str) -> str:
         try:
-            mol = Chem.MolFromSmiles(smi)
+            mol = chem_utils.parse_smiles(smi)
             if mol is None:
                 return smi
             return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
@@ -239,7 +239,7 @@ class Translator:
 
         if error_msg:
             RDLogger.EnableLog("rdApp.*")
-        mol = Chem.MolFromSmiles(smi)
+        mol = chem_utils.parse_smiles(smi)
         RDLogger.DisableLog("rdApp.*")
         if mol is None:
             if error_msg:
@@ -261,6 +261,24 @@ class Translator:
     @classmethod
     def parse_extension(cls, ext: str) -> str:
         return ext.strip("|")
+
+    @classmethod
+    def has_symbolic_sru(cls, caption: str) -> bool:
+        """Classify whole-molecule SRUs with a symbolic repeat count.
+
+        Local/nested repeats and numeric counts (including ranges) do not set
+        the sru flag; their structural annotations remain independently valid.
+        """
+        if Tokens.separator not in caption:
+            return False
+        trailing = caption.split(Tokens.separator, 1)[1]
+        _, ext = cls.parse_trailing(trailing)
+        matched = re.fullmatch(
+            r"Sg:([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)", cls.parse_extension(ext)
+        )
+        return bool(
+            matched and re.fullmatch(r"\d+(?:-\d+)?", matched.group(1)) is None
+        )
 
     @classmethod
     def parse_groups(cls, seq: str) -> List[GroupDesc]:
@@ -534,11 +552,38 @@ class Translator:
             "CF2",
             "NH",
         )
+        composite_descs = cls.parse_groups(groups)
+        atom_group_ids = [
+            int(desc.id)
+            for desc in composite_descs
+            if isinstance(desc.id, AtomIndex)
+            and not desc.is_circle
+            and not desc.is_dummy
+        ]
+        if len(atom_group_ids) != len(set(atom_group_ids)):
+            # Consuming one label by atom ID would also remove its siblings.
+            # Preserve ambiguous atom annotations before either expansion pass.
+            return TranslatedMolecule(
+                smi=smi,
+                groups=groups,
+                caption=caption,
+                esmi=cls.build_esmi(smi, groups, ext),
+                markush=True,
+                sru=cls.has_symbolic_sru(caption),
+            )
+        composite_abbrevs = chem_utils.get_abbrev_smi()
+
+        def keeps_an_open_site(desc: GroupDesc) -> bool:
+            # The legacy loop attaches a table fragment at atom 0 and keeps
+            # its wildcard. The Markush pass consumes that wildcard instead.
+            src = composite_abbrevs.get((desc.symbol or "") + (desc.script or ""))
+            return src is not None and "*" in src
+
         if any(
             desc.symbol
             and any(token in desc.symbol for token in composite_symbols)
-            for desc in cls.parse_groups(groups)
-        ):
+            for desc in composite_descs
+        ) and not any(keeps_an_open_site(desc) for desc in composite_descs):
             try:
                 expanded = cls.substitute_markush(
                     caption,
@@ -553,9 +598,10 @@ class Translator:
                 if translated is not None:
                     return replace(translated, caption=caption)
 
+        is_sru = cls.has_symbolic_sru(caption)
         try:
             abbrev_map = chem_utils.get_abbrev_smi()
-            raw_mol = Chem.MolFromSmiles(smi)
+            raw_mol = chem_utils.parse_smiles(smi)
             if raw_mol is None:
                 if error_msg:
                     logger.warning(f"Invalid SMILES: {smi}")
@@ -565,7 +611,7 @@ class Translator:
                     caption=caption,
                     esmi=cls.build_esmi(smi, groups, ext),
                     markush=len(groups) > 0,
-                    sru=False,
+                    sru=is_sru,
                 )
             repaired_groups = cls.repair_atom_group_indices(raw_mol, groups, error_msg=error_msg)
             if repaired_groups != groups:
@@ -574,7 +620,7 @@ class Translator:
             stereo_safe_smi, temporary_isotopes = cls._protect_stereo_for_dummy_substitution(
                 smi, groups, abbrev_map, raw_mol, error_msg=error_msg
             )
-            mol = raw_mol if stereo_safe_smi == smi else Chem.MolFromSmiles(stereo_safe_smi)
+            mol = raw_mol if stereo_safe_smi == smi else chem_utils.parse_smiles(stereo_safe_smi)
             if mol is None:
                 if error_msg:
                     logger.warning(f"Invalid SMILES: {smi}")
@@ -584,7 +630,7 @@ class Translator:
                     caption=caption,
                     esmi=cls.build_esmi(smi, groups, ext),
                     markush=len(groups) > 0,
-                    sru=False,
+                    sru=is_sru,
                 )
             for atom in mol.GetAtoms():
                 atom.SetAtomMapNum(atom.GetIdx() + 1)
@@ -607,24 +653,21 @@ class Translator:
             to_remove: List[int] = []
             consumed_atom_groups: set[int] = set()
             preserve_dummy_groups = False
-            preserve_precompat_groups = any(
+            has_markush_extensions = any(
                 token in groups
                 for token in (
                     Tokens.substruct_start,
                     Tokens.sgroup_start,
                     Tokens.virtual_start,
-                    Tokens.axial_start,
                     f"{Tokens.ring_start}{Tokens.virtual_start}",
                 )
             )
-            is_markush = preserve_precompat_groups
-            is_sru = False
-
-            if re.fullmatch(
-                r"Sg:[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?",
-                cls.parse_extension(ext),
-            ):
-                is_sru = True
+            # Axial configuration is definite stereochemistry. Preserve and
+            # remap it without classifying an otherwise resolved graph as Markush.
+            preserve_precompat_groups = (
+                has_markush_extensions or Tokens.axial_start in groups
+            )
+            is_markush = has_markush_extensions
 
             for desc in cls.parse_groups(groups):
                 if isinstance(desc.id, AtomIndex):
@@ -696,7 +739,7 @@ class Translator:
                     src_smi = abbrev_map.get(lookup_symbol)
 
                 if src_smi is not None:
-                    src_mol_check = Chem.MolFromSmiles(src_smi)
+                    src_mol_check = chem_utils.parse_smiles(src_smi)
                     if src_mol_check and src_mol_check.GetNumAtoms() == 1:
                         chem_utils.alter_atom(atom, smiles=src_smi)
                         consumed_atom_groups.add(int(desc.id))
@@ -768,7 +811,7 @@ class Translator:
                     sru=is_sru,
                 )
 
-            mol = Chem.MolFromSmiles(
+            mol = chem_utils.parse_smiles(
                 Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
             )
 
@@ -801,7 +844,7 @@ class Translator:
                 caption=caption,
                 esmi=cls.build_esmi(smi, groups, ext),
                 markush=len(groups) > 0,
-                sru=False,
+                sru=is_sru,
             )
 
     @classmethod

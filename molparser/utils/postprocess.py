@@ -38,23 +38,10 @@ def _physicalize_concrete_repeats(caption: str, error_msg: bool) -> str:
     return expanded if isinstance(expanded, str) else caption
 
 
-def _has_top_level_sru(caption: str) -> bool:
-    if "<sep>" not in caption:
-        return False
-    trailing = caption.split("<sep>", 1)[1]
-    _, ext = Translator.parse_trailing(trailing)
-    return bool(
-        re.fullmatch(
-            r"Sg:[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?",
-            Translator.parse_extension(ext),
-        )
-    )
-
-
 def postprocess_caption(caption: str, error_msg: bool = False) -> Dict[str, object]:
     """Refactor a raw caption into normalized SMILES, E-SMILES, and CXSMILES."""
     raw_caption = str(caption).strip()
-    source_sru = _has_top_level_sru(raw_caption)
+    source_sru = Translator.has_symbolic_sru(raw_caption)
     effective_caption = _physicalize_concrete_repeats(raw_caption, error_msg)
     result = Translator.refactor(effective_caption, error_msg=error_msg)
     normalized_caption = result.esmi if result is not None else effective_caption
