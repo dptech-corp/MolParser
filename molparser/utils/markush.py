@@ -101,12 +101,107 @@ def _resolve_group_smiles(
                 _add_oxygen_linker(_resolve_fragment_smiles(v))
                 for v in _as_values(value)
             ]
+    composite = _resolve_composite_group_smiles(
+        lookup_symbol,
+        definitions,
+    )
+    if composite:
+        return composite
     return []
 
 
 def _resolve_fragment_smiles(value: str) -> str:
     value = str(value).strip()
-    return chem_utils.get_abbrev_smi().get(value, value)
+    resolved = chem_utils.get_abbrev_smi().get(value, value)
+    return chem_utils.normalize_ionic_smiles(resolved)
+
+
+_COMPOSITE_PREFIXES = (
+    ("SO2", "S(=O)(=O)"),
+    ("CO", "C(=O)"),
+    ("CH2", "C"),
+    ("CF2", "C(F)(F)"),
+    ("NH", "N"),
+    ("N", "N"),
+    ("O", "O"),
+    ("S", "S"),
+)
+
+
+
+def _composite_prefix_smiles(prefix: str) -> str | None:
+    """Build a conservative linear prefix with core and terminal ports."""
+    pieces = ["*"]
+    cursor = 0
+    while cursor < len(prefix):
+        for token, smiles in _COMPOSITE_PREFIXES:
+            if prefix.startswith(token, cursor):
+                pieces.append(smiles)
+                cursor += len(token)
+                break
+        else:
+            return None
+    return "".join(pieces) + "*"
+
+
+def _resolve_composite_group_smiles(
+    symbol: str,
+    definitions: Mapping[str, DefinitionValue],
+) -> list[str]:
+    """Resolve forms such as COOR, NHR, OX and CONHCOOt-Bu.
+
+    The parser is deliberately limited to known linear bivalent prefixes. It
+    never substitutes arbitrary substrings, which avoids interpreting element
+    symbols or ordinary abbreviations as Markush variables.
+    """
+    lookup = _definition_lookup(definitions)
+    abbrevs = chem_utils.get_abbrev_smi()
+    suffixes = set(abbrevs)
+    suffixes.update(
+        str(key).replace("[", "").replace("]", "").strip()
+        for key in definitions
+    )
+    suffixes.update({"R", "X", "Y", "Ar", "Het"})
+    for suffix in sorted(suffixes, key=len, reverse=True):
+        if not suffix or symbol == suffix or not symbol.endswith(suffix):
+            continue
+        prefix = _composite_prefix_smiles(symbol[: -len(suffix)])
+        if prefix is None:
+            continue
+        value = lookup.get(suffix)
+        if value is None:
+            value = abbrevs.get(suffix)
+        if value is None:
+            continue
+        outputs: list[str] = []
+        for terminal in _as_values(value):
+            terminal_smiles = _resolve_fragment_smiles(terminal)
+            try:
+                target = Chem.MolFromSmiles(prefix)
+                if target is None:
+                    continue
+                editable = Chem.RWMol(target)
+                terminal_dummies = [
+                    atom.GetIdx()
+                    for atom in editable.GetAtoms()
+                    if atom.GetSymbol() == "*"
+                ]
+                if len(terminal_dummies) != 2:
+                    continue
+                _attach_fragment(editable, terminal_dummies[1], terminal_smiles)
+                Chem.SanitizeMol(editable)
+                outputs.append(
+                    Chem.MolToSmiles(
+                        editable,
+                        canonical=True,
+                        isomericSmiles=True,
+                    )
+                )
+            except (ValueError, RuntimeError):
+                continue
+        if outputs:
+            return outputs
+    return []
 
 
 def _resolve_sgroup_count(
