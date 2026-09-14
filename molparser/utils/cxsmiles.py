@@ -8,8 +8,10 @@ import re
 from rdkit import Chem
 
 try:
+    from . import chem_utils
     from .translator import AtomIndex, Translator
 except ImportError:  # Support running from package directory as working directory.
+    import chem_utils
     from translator import AtomIndex, Translator
 
 
@@ -163,7 +165,7 @@ def _convert_refactored_esmi_to_cxsmiles(
         return esmi.split("<sep>", 1)[0]
     smi, groups, ext = parsed
 
-    mol = Chem.MolFromSmiles(smi)
+    mol = chem_utils.parse_smiles(smi)
     if mol is None:
         return smi
 

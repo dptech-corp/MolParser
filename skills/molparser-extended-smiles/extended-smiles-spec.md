@@ -1,6 +1,8 @@
-# MolParser E-SMILES Spec
+# MolParser E-SMILES 2.0 Spec
 
-This spec follows the current `utils` implementation and the documented MolParser figure set.
+This document describes E-SMILES 2.0 notation and the current `utils` behavior.
+Repository compatibility extensions and normalization conventions are identified
+separately from the core notation.
 
 ## 1. Top-Level Format
 
@@ -26,7 +28,8 @@ For ordinary molecules, use `SMILES<sep>`.
 - `GROUP_LABEL`: substituent, abbreviation, or Markush placeholder. Legacy inputs may also use `<dum>` here for dummy attachment points.
 - Atom-indexed special Markush labels use `<id>[NOTE]`, where `NOTE` is a
   non-empty, whitespace-free custom remark. Use this payload only inside
-  `<a>...</a>`;
+  `<a>...</a>`. The literal form is `<a>0:<id>[DNA]</a>`; `<id>` is an
+  inline marker and has no closing `</id>` token.
 
 Example:
 
@@ -72,6 +75,9 @@ Example:
 
 `<d>[ATOM_INDEX]:<dum></d>` marks an explicit dummy atom attachment point. This is the E-SMILES 2.0 representation. The legacy `<a>[ATOM_INDEX]:<dum></a>` form remains valid for backward compatibility.
 
+The index must point to `*` in the base SMILES. `<dum>` is an inline marker;
+do not add `</dum>`.
+
 ```text
 *C(O)=O<sep><d>0:<dum></d>
 ```
@@ -82,15 +88,15 @@ Example:
 
 - `VIRTUALARC_INDEX`: zero-based index in a namespace separate from atoms and rings.
 - `VIRTUALARC_NAME`: source label such as `A`, `Ar`, or `M`; it may be empty when the source arc is unnamed, for example `<v>0::[0:2]</v>`.
-- `FROM_ATOM` and `TO_ATOM`: zero-based base-SMILES atom indexes for the endpoints. General readers may accept `[0:2]` and legacy `[2:0]` as equivalent. New datasets should emit the canonical order described below.
+- `FROM_ATOM` and `TO_ATOM`: zero-based base-SMILES atom indexes for the endpoints. The repository accepts `[0:2]` and `[2:0]` as equivalent. Its normalization convention is to emit ascending endpoint pairs, sort the pairs lexicographically, assign consecutive arc ids, and update `<r><v>` references. This is a repository convention, distinct from the required ascending axis atom indexes for `<x>`.
 - A substituent attached to a virtualArc uses `<r><v>[VIRTUALARC_INDEX]:[GROUP_LABEL]</r>`.
-- Current utilities preserve these records as pre-compatible annotations. The drawer renders their virtual-arc geometry, while normalization and Markush substitution do not turn the annotation into a chemical bond.
+- Virtual arcs are E-SMILES 2.0 annotations for abstract connections, not chemical bonds. The drawer renders their geometry, while normalization and Markush substitution preserve their annotation semantics without adding a chemical bond.
 
 ```text
 C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 ```
 
-### Biphenyl Axial Chirality
+### Biaryl Axial Chirality
 
 ```text
 <x>[ATOM_1:ATOM_2]:[STATE]</x>
@@ -104,6 +110,9 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 - Normalized E-SMILES preserves this record and remaps both atom indexes after
   abbreviation substitution or canonicalization. Plain SMILES output ignores
   the annotation; current utilities do not assign RDKit axial stereochemistry.
+- Definite axial configuration alone is not Markush. The following example has
+  `markush=False` and `sru=False`; an independent unresolved label or virtual
+  arc can still make a structure Markush.
 
 ```text
 Nc1ccc2ccccc2c1-c1c(O)ccc2ccccc12<sep><x>[10:11]:Sa</x>
@@ -119,23 +128,28 @@ Use a suffix on a group label for local substructure multiplicity:
 <a>0:CH2?3</a>
 ```
 
-Use `|Sg:n|` for structural repeating unit (SRU) repetition:
+Use top-level `|Sg:COUNT|` for whole-molecule structural repetition. When the
+source identifies an unspecified whole repeat, write `|Sg:n|`:
 
 ```text
-*CC*<sep><d>0:<dum></d><d>2:<dum></d>|Sg:n|
+*CC*<sep><d>0:<dum></d><d>3:<dum></d>|Sg:n|
 ```
 
-Current `molparser.utils.postprocess_caption` recognizes syntactically valid
-`|Sg:COUNT|` forms, including symbolic, numeric, and simple range counts, as SRU
-markers.
+Symbolic, numeric, and simple range counts are valid repeat annotations. The
+public `sru` classification is narrower: it is true only for a symbolic
+whole-molecule count, not integers, numeric ranges, or local/nested repeats.
 
-Use `<s>...</s>` for a nested substructure record, typically a ring-external repeat fragment. The body is another `SMILES<sep>EXTENSION` fragment.
+The repository additionally accepts `<s>...</s>` as a compatibility extension
+for nested substructure records, typically ring-external repeat fragments. It
+is not one of the core tokens described in the E-SMILES 2.0 announcement. The
+body is another `SMILES<sep>EXTENSION` fragment with its own atom indexes.
 
 ```text
 N1=C(N)C2=C(C(=C(N2)*)***)N=C1**<sep><a>8:R[2]</a><a>9:L[2]</a><a>10:B</a><s>**<sep><a>0:L[3]</a><a>1:R[3]</a>|Sg:n|</s><a>14:L[1]</a><a>15:R[1]</a>
 ```
 
-Use `<g>[INNER_PORT:OUTER_PORT]:...:|Sg:n|</g>` for an s-group repeat record.
+Use `<g>[INNER_PORT:OUTER_PORT]:...:|Sg:n|</g>` for an E-SMILES 2.0 local
+s-group repeat record. It does not itself set the whole-molecule `sru` flag.
 
 - `INNER_PORT`: atom index inside the repeat structure.
 - `OUTER_PORT`: atom index outside the repeat structure.
@@ -169,13 +183,46 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><g>[3:2]:[4:5]:|Sg:20|</g>
 ## 5. Utility Behavior
 
 - `molparser.utils.postprocess_caption` / `Translator.refactor` canonicalize SMILES and substitute known atom-indexed abbreviations from `molparser/utils/abbrevs_example.csv` when the attachment is chemically valid.
+- `substitute_markush` checks complete user definitions first, then complete
+  abbreviation matches, before attempting composite splitting. Supported
+  linear prefixes include `SO2`, `CO2`, `CO`, `CH2`, `CF2`, `NH`, `N`, `O`,
+  and `S`; multiple prefixes can precede a resolvable terminal group. In
+  best-effort mode, partial atom-group expansion can retain labels such as
+  `R`, `X`, `Y`, `Ar`, `Het`, or supported indexed forms on a new dummy atom,
+  with annotation indexes remapped. Unknown forms that cannot be split remain
+  whole labels. These are implementation heuristics, not new E-SMILES tokens.
+- The automatic composite pass in `postprocess_caption` currently triggers on
+  `SO2`, `CO2`, `CO`, `CH2`, `CF2`, or `NH`. For standalone composite forms
+  such as `NR`, `OR`, and `SR`, call `substitute_markush` explicitly. For
+  example, `*CCO<sep><a>0:CONHAr</a>` with no definitions becomes
+  `*NC(=O)CCO<sep><a>0:Ar</a>` in best-effort mode. A fully resolved branch is
+  returned as SMILES; unresolved branches may remain E-SMILES.
 - Resolved substituents are folded into the base `smi`; unresolved Markush or ring-level annotations remain in `groups`.
 - Atom-indexed `<id>[NOTE]` records remain in `groups`; they are not looked up
   in the Markush definition dictionary. Non-ball notes render as text, while
   only approved values on `*` in Section 4 render as endpoint balls.
-- Pre-compatible `<s>` records are preserved in `groups`; `substitute_markush` can substitute labels inside one single-level substructure record and return the result as an E-SMILES annotation, without attaching or expanding it into the main molecule. An `<s>` nested inside another `<s>` is outside the supported grammar and is rejected.
-- Pre-compatible `<s>` and under-specified `<g>`, `<v>`, `<x>`, or `<r><v>...` portions remain in `groups`. When other substitutions reorder the outer graph, retained `<g>` ports, `<v>` endpoints, `<x>` axis atoms, and `<c>` atom indices are remapped; if an endpoint was removed, best-effort mode rolls back that branch instead of emitting a stale index. A symbolic `<g>` count may resolve to one positive integer even when its graph remains residual.
+- Compatibility `<s>` records are preserved in `groups`; `substitute_markush` can substitute labels inside one single-level substructure record and return the result as an E-SMILES annotation, without attaching or expanding it into the main molecule. An `<s>` nested inside another `<s>` is outside the supported grammar and is rejected.
+- Retained `<s>`, unresolved `<g>`, virtual-arc records, and definite `<x>` annotations remain in `groups`. When other substitutions reorder the outer graph, retained `<g>` ports, `<v>` endpoints, `<x>` axis atoms, and `<c>` atom indices are remapped; if an endpoint was removed, best-effort mode rolls back that branch instead of emitting a stale index. A symbolic `<g>` count may resolve to one positive integer even when its graph remains residual.
 - `draw` renders SMILES or E-SMILES to SVG/PNG for visual QA, including SRU and local-repeat brackets, virtual arcs, and approved MolParser endpoint-ball labels.
+
+### Classification Flags
+
+`markush` and `sru` describe different properties and may both be true. They do
+not control annotation preservation or the scope of a rendered repeat.
+
+| Situation, with no other annotations | `markush` | `sru` |
+| --- | --- | --- |
+| Fully specified molecule with only `<x>` | `False` | `False` |
+| Unresolved atom/ring group or virtual arc | `True` | `False` |
+| Whole repeat with top-level `|Sg:n|` or `|Sg:m|` | `False` | `True` |
+| Whole repeat with top-level `|Sg:3|` or `|Sg:1-3|` | `False` | `False` |
+| Symbolic local `<g>`, `?n`, or a repeat inside `<s>` | `True` | `False` |
+
+The whole-repeat rows assume explicit terminal dummies and no unresolved
+substituents. Numeric repeat annotations can remain valid even with
+`sru=False`; post-processing expands a numeric repeat only when it can return
+one deterministic structure. Use `esmi` to retain extensions such as `<x>`
+that plain SMILES and current CXSMILES conversion do not encode.
 
 ## 6. Unsupported Chemistry
 
@@ -184,15 +231,16 @@ The current token set does not encode:
 - coordination or dative-bond semantics beyond the representational scope of standard SMILES (e.g., metal complexes);
 - electron-transfer arrows;
 - uncertain bond styles;
-- uncertain chirality and non-biphenyl axial chirality.
+- uncertain chirality and axial chirality outside the supported biaryl case.
 
 Preserve the encodable backbone, do not invent tokens, and report unencoded chemistry explicitly.
 
 ## 7. Validation Checklist
 
-- at least one top-level `<sep>`; nested `<s>` records may contain their own `<sep>`;
+- exactly one top-level `<sep>`; nested `<s>` records may contain their own `<sep>`;
 - balanced `<a>`, `<d>`, `<r>`, `<c>`, `<s>`, `<g>`, `<v>`, and `<x>` tags, allowing inline `<r><v>...</r>`;
 - non-negative indexes in the correct namespace;
+- `<d>...:<dum></d>` and legacy `<a>...:<dum></a>` must index a dummy `*` atom;
 - `<x>` uses two directly bonded aromatic atom indexes in ascending order and a `Ra` or `Sa` state;
 - no whitespace inside group labels;
 - special labels use exactly `<a>[ATOM_INDEX]:<id>[NOTE]</a>` with a non-empty,

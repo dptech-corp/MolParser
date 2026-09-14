@@ -15,9 +15,18 @@ _ABBREV_CSV = Path(__file__).parent / "abbrevs_example.csv"
 _IONIC_MONOVALENT_METALS = frozenset({"Li", "Na", "K"})
 
 
+def parse_smiles(smiles: str, *, sanitize: bool = True) -> Chem.rdchem.Mol | None:
+    """Keep explicit atoms so E-SMILES indices survive every parse boundary."""
+    params = Chem.SmilesParserParams()
+    params.removeHs = False
+    params.parseName = False
+    params.sanitize = sanitize
+    return Chem.MolFromSmiles(str(smiles), params)
+
+
 def normalize_ionic_smiles(smiles: str) -> str:
     """Charge neutral O-alkali bonds as an ionic salt when unambiguous."""
-    mol = Chem.MolFromSmiles(str(smiles))
+    mol = parse_smiles(smiles)
     if mol is None:
         return str(smiles)
     editable = Chem.RWMol(mol)
@@ -32,6 +41,16 @@ def normalize_ionic_smiles(smiles: str) -> str:
         metal = begin if begin.GetSymbol() in _IONIC_MONOVALENT_METALS else end if end.GetSymbol() in _IONIC_MONOVALENT_METALS else None
         if oxygen is None or metal is None:
             continue
+        if (
+            metal.GetDegree() != 1
+            or oxygen.GetDegree() > 2
+            or oxygen.GetNumExplicitHs() > 0
+            or any(
+                atom.GetSymbol() in _IONIC_MONOVALENT_METALS and atom.GetIdx() != metal.GetIdx()
+                for atom in oxygen.GetNeighbors()
+            )
+        ):
+            continue
         if oxygen.GetFormalCharge() == 0 and metal.GetFormalCharge() == 0:
             oxygen.SetFormalCharge(-1)
             metal.SetFormalCharge(1)
@@ -40,9 +59,23 @@ def normalize_ionic_smiles(smiles: str) -> str:
         return str(smiles)
     try:
         Chem.SanitizeMol(editable)
-        return Chem.MolToSmiles(editable, canonical=True, isomericSmiles=True)
+        # Atom 0 is the implicit attachment site. Canonical output can move it
+        # to oxygen or lithium; serialization can also pin its H as in [SH].
+        rewritten = Chem.MolToSmiles(editable, canonical=False, isomericSmiles=True)
+        round_tripped = parse_smiles(rewritten)
+        if round_tripped is None or _attachment_slot(mol) != _attachment_slot(round_tripped):
+            return str(smiles)
+        return rewritten
     except Exception:
         return str(smiles)
+
+
+def _attachment_slot(mol: Chem.rdchem.Mol) -> Tuple[str, int]:
+    """Track the implicit attachment atom and any pinned explicit hydrogens."""
+    if mol.GetNumAtoms() == 0:
+        return ("", 0)
+    atom = mol.GetAtomWithIdx(0)
+    return (atom.GetSymbol(), atom.GetNumExplicitHs() if atom.GetNoImplicit() else 0)
 
 
 class UnmappableAnnotationError(ValueError):
@@ -70,7 +103,7 @@ def get_abbrev_smi() -> Dict[str, str]:
 
 
 def get_mol(smi: str) -> Chem.rdchem.Mol:
-    mol = Chem.MolFromSmiles(smi)
+    mol = parse_smiles(smi)
     if mol is None:
         raise ValueError(f"Invalid SMILES: {smi}")
     return mol
@@ -96,7 +129,7 @@ def _preserved_records(
     however, refer to the outer graph and must follow canonical atom ordering.
     """
 
-    def remap_pair(match: re.Match) -> str:
+    def remap_pair(match: re.Match, ordered: bool = False) -> str:
         if atom_index_map is None:
             return match.group(0)
         left, right = int(match.group("left")), int(match.group("right"))
@@ -104,12 +137,17 @@ def _preserved_records(
             raise UnmappableAnnotationError(
                 "Unable to remap a preserved E-SMILES atom index"
             )
-        return f"[{atom_index_map[left]}:{atom_index_map[right]}]"
+        left, right = atom_index_map[left], atom_index_map[right]
+        if ordered:
+            left, right = sorted((left, right))
+        return f"[{left}:{right}]"
 
     records: List[str] = []
     for match in _PRESERVED_RECORD_PATTERN.finditer(groups):
         record = match.group(0)
-        if record.startswith(("<g>", "<v>", "<x>")):
+        if record.startswith(("<v>", "<x>")):
+            record = _PORT_PAIR_PATTERN.sub(lambda pair: remap_pair(pair, ordered=True), record)
+        elif record.startswith("<g>"):
             record = _PORT_PAIR_PATTERN.sub(remap_pair, record)
         elif record.startswith("<c>") and atom_index_map is not None:
             indexed = _ATOM_RECORD_INDEX_PATTERN.search(record)
@@ -172,7 +210,7 @@ def _canonical_output_order(mol: Chem.rdchem.Mol) -> Tuple[Dict[int, int], Chem.
         atom.SetAtomMapNum(0)
 
     smi = Chem.MolToSmiles(output_mol, canonical=True, isomericSmiles=True)
-    final_mol = Chem.MolFromSmiles(smi)
+    final_mol = parse_smiles(smi)
     try:
         order = ast.literal_eval(output_mol.GetProp("_smilesAtomOutputOrder"))
     except Exception:
@@ -190,17 +228,18 @@ def alter_atom(
     element: None | str = None,
 ) -> None:
     if smiles:
-        src_mol_check = Chem.MolFromSmiles(smiles)
+        src_mol_check = parse_smiles(smiles)
         rep_atom = src_mol_check.GetAtomWithIdx(0)
         atom.SetAtomicNum(rep_atom.GetAtomicNum())
         atom.SetFormalCharge(rep_atom.GetFormalCharge())
+        atom.SetIsotope(rep_atom.GetIsotope())
     elif element:
         atom.SetAtomicNum(Chem.GetPeriodicTable().GetAtomicNumber(element))
         atom.SetFormalCharge(0)
+        atom.SetIsotope(0)
     else:
         raise ValueError("Either smiles or element must be provided")
 
-    atom.SetIsotope(0)
     atom.SetNumExplicitHs(0)
     atom.SetNoImplicit(False)
     if atom.GetDegree() == 1:

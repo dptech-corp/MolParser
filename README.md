@@ -125,9 +125,10 @@ Common extension records:
 - `<r>0:R[1]</r>` — ring-indexed substituent (regio-uncertain attachment)
 - `<c>9:B</c>` — abstract-ring or superatom placeholder
 - `<d>0:<dum></d>` — explicit dummy attachment point (E-SMILES 2.0 form; legacy `<a>0:<dum></a>` in E-SMILES 1.0 is still accepted)
-- `<s>...</s>` — nested substructure record for ring-external repeat fragments
+- `<s>...</s>` — repository compatibility extension for nested substructure records
 - `<g>[3:2]:[5:6]:|Sg:n|</g>` — local s-group repeat record with two inner/outer boundary ports
 - `<v>0:A:[0:2]</v>` — virtualArc record
+- `<x>[10:11]:Sa</x>` — biaryl axial configuration (`Ra` or `Sa`), with axis atom indexes in ascending order
 - `|Sg:n|` — structural repeating unit (SRU) marker
 - `?n` — local substructure multiplicity suffixes
 
@@ -147,8 +148,8 @@ result = mutils.postprocess_caption(raw)
 # smi: normalized RDKit SMILES after substituting known abbreviations
 # esmi: normalized E-SMILES after substitution and index repair
 # cxsmiles: CXSMILES generated from the normalized E-SMILES
-# markush: True if unresolved Markush labels remain
-# sru: True if a structural repeating unit marker was detected
+# markush: unresolved variable or abstract structure
+# sru: True only for a symbolic whole-molecule repeat count
 # groups: unresolved E-SMILES extension records kept after normalization
 for key in ("caption", "smi", "esmi", "cxsmiles", "markush", "sru", "groups"):
     print(f"{key}: {result[key]}")
@@ -181,7 +182,7 @@ print(result)
 # Cc1ccccc1
 ```
 
-Ring-indexed Markush records expand regio-uncertain attachments into a SMILES list. Multiplicity suffixes such as `?3`, `?1-3`, and `?n` encode local substructure replication over possible ring sites; `?n` reads the replication count from the definition dictionary.
+Ring-indexed Markush records enumerate regio-uncertain attachments. The result is a string for one distinct structure after symmetry de-duplication, or a list for multiple structures. Multiplicity suffixes such as `?3`, `?1-3`, and `?n` encode local substructure replication over possible ring sites; `?n` reads the replication count from the definition dictionary.
 
 ```python
 result = mutils.substitute_markush(

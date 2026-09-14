@@ -50,6 +50,13 @@ Each result includes `source`, `input_index`, `page_index`, `bbox`, `confidence`
 - PDF input: one result per detected molecule on rendered PDF pages; `page_index`, `bbox`, and `confidence` are populated.
 - List input: flat result list; use `input_index` to map each result back to the original list item.
 
+Use `esmi` for downstream tasks that need E-SMILES 2.0 annotations, including
+axial chirality; `smi` does not preserve every extension. For token definitions,
+classification flags, and index handling, read
+[`molparser-extended-smiles/SKILL.md`](../molparser-extended-smiles/SKILL.md).
+An `<x>` record alone does not set `markush`. `sru` is reserved for a symbolic
+whole-molecule repeat count, not local repeats or numeric counts/ranges.
+
 ## License Notes
 
 MolDetv2 weights are non-commercial according to their model card. The PyTorch detection path uses Ultralytics YOLO; closed-source, private, SaaS, internal business, or commercial usage may require AGPL-3.0 compliance or an Ultralytics Enterprise license.

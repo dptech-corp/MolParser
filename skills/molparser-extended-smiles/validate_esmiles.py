@@ -90,6 +90,7 @@ def _validate_record(
     *,
     atom_count: int | None = None,
     ring_count: int | None = None,
+    dummy_indices: set[int] | None = None,
 ) -> tuple[str, int] | None:
     stripped = body.strip()
     match = INDEX_VALUE_RE.match(stripped)
@@ -142,6 +143,15 @@ def _validate_record(
 
     if "<sep>" in value:
         add(messages, "warning", f"<{tag}> value contains <sep>; check for accidental nesting")
+
+    if (
+        (tag == "d" or (tag == "a" and value == "<dum>"))
+        and atom_count is not None
+        and numeric_index < atom_count
+        and dummy_indices is not None
+        and numeric_index not in dummy_indices
+    ):
+        add(messages, "error", f"<{tag}> dummy attachment index {numeric_index} must point to a * atom")
 
     if tag == "d":
         if value != "<dum>":
@@ -331,7 +341,10 @@ def validate(esmiles: str, strict: bool = False) -> list[Message]:
         rd_logger = importlib.import_module("rdkit.RDLogger")
         rd_logger.DisableLog("rdApp.*")
         try:
-            mol = chem.MolFromSmiles(base.strip())
+            params = chem.SmilesParserParams()
+            params.removeHs = False
+            params.parseName = False
+            mol = chem.MolFromSmiles(base.strip(), params)
         finally:
             rd_logger.EnableLog("rdApp.*")
         if mol is None:
@@ -380,6 +393,10 @@ def validate(esmiles: str, strict: bool = False) -> list[Message]:
             messages,
             atom_count=atom_count,
             ring_count=ring_count,
+            dummy_indices=(
+                {atom.GetIdx() for atom in mol.GetAtoms() if atom.GetAtomicNum() == 0}
+                if mol is not None else None
+            ),
         )
         if record_info is not None and record_info[0] == "virtual_arc":
             virtual_ref_ids.append(record_info[1])

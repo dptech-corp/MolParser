@@ -26,7 +26,7 @@ class _UnexpandableRepeat(ValueError):
     """A valid repeat annotation whose physical topology is under-specified."""
 
 _PRECOMPAT_RECORD_PATTERN = re.compile(
-    r"<s>.*?</s>|<g>.*?</g>|<r><v>\d+:.+?</r>|<v>.*?</v>",
+    r"<s>.*?</s>|<g>.*?</g>|<r><v>\d+:.+?</r>|<v>.*?</v>|<x>.*?</x>",
     re.DOTALL,
 )
 _SUBSTRUCT_RECORD_PATTERN = re.compile(r"^<s>(?P<body>.*)</s>$", re.DOTALL)
@@ -59,6 +59,8 @@ def _group_labels(desc: GroupDesc) -> list[str]:
     labels = [desc.symbol]
     if desc.script:
         labels = [f"{desc.symbol}[{desc.script}]", f"{desc.symbol}{desc.script}"]
+    if desc.prime:
+        labels = [label + desc.prime for label in labels]
     return labels
 
 
@@ -83,6 +85,8 @@ def _resolve_group_smiles(
     lookup_symbol = desc.symbol or ""
     if desc.script:
         lookup_symbol += desc.script
+    if desc.prime:
+        lookup_symbol += desc.prime
     src = chem_utils.get_abbrev_smi().get(lookup_symbol)
     if src is not None:
         return [src]
@@ -95,6 +99,7 @@ def _resolve_group_smiles(
         if matched is not None:
             oxygen_markush = f"R{matched.group(1)}"
     if oxygen_markush is not None:
+        oxygen_markush += desc.prime or ""
         value = definition_lookup.get(oxygen_markush)
         if value is not None:
             return [
@@ -118,6 +123,7 @@ def _resolve_fragment_smiles(value: str) -> str:
 
 _COMPOSITE_PREFIXES = (
     ("SO2", "S(=O)(=O)"),
+    ("CO2", "C(=O)O"),
     ("CO", "C(=O)"),
     ("CH2", "C"),
     ("CF2", "C(F)(F)"),
@@ -131,6 +137,8 @@ _COMPOSITE_PREFIXES = (
 
 def _composite_prefix_smiles(prefix: str) -> str | None:
     """Build a conservative linear prefix with core and terminal ports."""
+    if not prefix:
+        return None
     pieces = ["*"]
     cursor = 0
     while cursor < len(prefix):
@@ -142,6 +150,129 @@ def _composite_prefix_smiles(prefix: str) -> str | None:
         else:
             return None
     return "".join(pieces) + "*"
+
+
+_PARTIAL_MARKUSH_SUFFIXES = ("R", "X", "Y", "Ar", "Het")
+_ELEMENT_SYMBOLS = frozenset(
+    Chem.GetPeriodicTable().GetElementSymbol(number) for number in range(1, 119)
+)
+
+
+def _partial_composite(
+    symbol: str,
+    script: str | None = None,
+) -> tuple[str, str] | None:
+    if script:
+        # Brackets explicitly identify the subscript; keep nonnumeric indices
+        # too, instead of folding R[x] into an indistinguishable plain string.
+        for start in range(len(symbol) - 1, 0, -1):
+            suffix = symbol[start:]
+            if re.fullmatch(r"[A-Za-z][A-Za-z-]*", suffix) is None:
+                continue
+            prefix = _composite_prefix_smiles(symbol[:start])
+            if prefix is not None:
+                return prefix, f"{suffix}[{script}]"
+        return None
+    indexed = _indexed_partial_composite(symbol)
+    if indexed is not None:
+        return indexed
+    for suffix in sorted(_PARTIAL_MARKUSH_SUFFIXES, key=len, reverse=True):
+        if not symbol.endswith(suffix):
+            continue
+        prefix = _composite_prefix_smiles(symbol[: -len(suffix)])
+        if prefix is not None:
+            return prefix, suffix
+    return None
+
+
+def _indexed_partial_composite(
+    symbol: str,
+) -> tuple[str, str] | None:
+    """Split a fixed prefix from an explicitly indexed residual label."""
+    for start in range(len(symbol) - 1, 0, -1):
+        suffix = symbol[start:]
+        matched = re.fullmatch(r"([A-Za-z][A-Za-z-]*)(\d+)", suffix)
+        if matched is None:
+            continue
+        base, index = matched.groups()
+        elements = re.findall(r"[A-Z][a-z]?", base)
+        if base not in _PARTIAL_MARKUSH_SUFFIXES and (
+            base in chem_utils.get_abbrev_smi()
+            or ("".join(elements) == base and all(item in _ELEMENT_SYMBOLS for item in elements))
+        ):
+            # Me2/Ph2 and atom counts such as O2/CH2 are not implicit Markush
+            # indices. An explicitly bracketed label is handled separately.
+            continue
+        prefix = _composite_prefix_smiles(symbol[:start])
+        if prefix is None:
+            continue
+        return prefix, f"{base}[{index}]"
+    return None
+
+
+def _next_source_index(states: Sequence[Chem.rdchem.RWMol]) -> int:
+    return max(
+        (
+            atom.GetAtomMapNum() - 1
+            for state in states
+            for atom in state.GetAtoms()
+            if atom.GetAtomMapNum() > 0
+        ),
+        default=-1,
+    ) + 1
+
+
+def _expand_indexed_partial(
+    states: list[Chem.rdchem.RWMol],
+    desc: GroupDesc,
+    prefix: str,
+    residual_label: str,
+    source_index_floor: int = 0,
+) -> tuple[list[Chem.rdchem.RWMol], str]:
+    """Attach a fixed prefix while retaining a new dummy for the residual label."""
+    # Removed atoms can still own retained annotations. Never reuse their IDs.
+    source_index = max(_next_source_index(states), source_index_floor)
+    prefix_mol = chem_utils.parse_smiles(prefix)
+    if prefix_mol is None:
+        raise ValueError("Invalid partial composite prefix")
+    prefix_dummies = [
+        atom.GetIdx() for atom in prefix_mol.GetAtoms() if atom.GetSymbol() == "*"
+    ]
+    if len(prefix_dummies) != 2:
+        raise ValueError("Partial composite prefix must have two attachment points")
+    endpoint = prefix_mol.GetAtomWithIdx(prefix_dummies[1])
+    neighbors = list(endpoint.GetNeighbors())
+    if len(neighbors) != 1:
+        raise ValueError("Partial composite prefix has no terminal neighbor")
+    # Carry the residual endpoint through _attach_fragment without introducing
+    # a second attachment atom in the source fragment.
+    terminal_atom = neighbors[0]
+    terminal_h = terminal_atom.GetTotalNumHs()
+    terminal_atom.SetIsotope(999)
+    source = Chem.RWMol(prefix_mol)
+    source.RemoveAtom(prefix_dummies[1])
+    prefix_source = Chem.MolToSmiles(
+        source, canonical=False, isomericSmiles=True
+    )
+    expanded: list[Chem.rdchem.RWMol] = []
+    for state in states:
+        target_idx = _find_atom_by_source_index(state, int(desc.id))
+        if target_idx is None:
+            raise ValueError(f"Atom index {int(desc.id)} is out of range")
+        output = Chem.RWMol(state)
+        _attach_fragment(output, target_idx, prefix_source)
+        endpoints = [atom for atom in output.GetAtoms() if atom.GetIsotope() == 999]
+        if len(endpoints) != 1:
+            raise ValueError("Partial composite has no residual attachment point")
+        endpoint = endpoints[0]
+        endpoint.SetIsotope(0)
+        endpoint.SetNoImplicit(True)
+        endpoint.SetNumExplicitHs(terminal_h)
+        residual_idx = output.AddAtom(Chem.Atom("*"))
+        output.AddBond(endpoint.GetIdx(), residual_idx, Chem.BondType.SINGLE)
+        output.GetAtomWithIdx(residual_idx).SetAtomMapNum(source_index + 1)
+        expanded.append(output)
+    return expanded, f"<a>{source_index}:{residual_label}</a>"
 
 
 def _resolve_composite_group_smiles(
@@ -161,7 +292,6 @@ def _resolve_composite_group_smiles(
         str(key).replace("[", "").replace("]", "").strip()
         for key in definitions
     )
-    suffixes.update({"R", "X", "Y", "Ar", "Het"})
     for suffix in sorted(suffixes, key=len, reverse=True):
         if not suffix or symbol == suffix or not symbol.endswith(suffix):
             continue
@@ -169,17 +299,29 @@ def _resolve_composite_group_smiles(
         if prefix is None:
             continue
         value = lookup.get(suffix)
-        if value is None:
+        from_abbrev_table = value is None
+        if from_abbrev_table:
             value = abbrevs.get(suffix)
         if value is None:
             continue
         outputs: list[str] = []
+        candidate_failed = False
         for terminal in _as_values(value):
-            terminal_smiles = _resolve_fragment_smiles(terminal)
+            if from_abbrev_table:
+                # Table values are already SMILES: NHCH3 -> NC must not look
+                # up NC a second time and turn methylamine into isocyanide.
+                terminal_smiles = chem_utils.normalize_ionic_smiles(str(terminal).strip())
+                # A table fragment can reserve a spare wildcard (e.g. LysO).
+                # Composite attachment would consume it and change the graph.
+                if "*" in terminal_smiles:
+                    return []
+            else:
+                terminal_smiles = _resolve_fragment_smiles(terminal)
             try:
-                target = Chem.MolFromSmiles(prefix)
+                target = chem_utils.parse_smiles(prefix)
                 if target is None:
-                    continue
+                    candidate_failed = True
+                    break
                 editable = Chem.RWMol(target)
                 terminal_dummies = [
                     atom.GetIdx()
@@ -187,7 +329,8 @@ def _resolve_composite_group_smiles(
                     if atom.GetSymbol() == "*"
                 ]
                 if len(terminal_dummies) != 2:
-                    continue
+                    candidate_failed = True
+                    break
                 _attach_fragment(editable, terminal_dummies[1], terminal_smiles)
                 Chem.SanitizeMol(editable)
                 outputs.append(
@@ -198,7 +341,10 @@ def _resolve_composite_group_smiles(
                     )
                 )
             except (ValueError, RuntimeError):
-                continue
+                candidate_failed = True
+                break
+        if candidate_failed:
+            return []
         if outputs:
             return outputs
     return []
@@ -454,7 +600,7 @@ def _source_attachment(src_mol: Chem.rdchem.Mol) -> tuple[int, int | None]:
 
 def _add_oxygen_linker(fragment_smiles: str) -> str:
     """Insert oxygen between the parent attachment and an R-group fragment."""
-    fragment = Chem.MolFromSmiles(fragment_smiles)
+    fragment = chem_utils.parse_smiles(fragment_smiles)
     if fragment is None:
         raise ValueError(f"Invalid substituent SMILES: {fragment_smiles}")
     attach_idx, dummy_idx = _source_attachment(fragment)
@@ -608,7 +754,7 @@ def _attach_fragment(
     attach_idx: int,
     fragment_smiles: str,
 ) -> None:
-    src_mol = Chem.MolFromSmiles(fragment_smiles)
+    src_mol = chem_utils.parse_smiles(fragment_smiles)
     if src_mol is None:
         raise ValueError(f"Invalid substituent SMILES: {fragment_smiles}")
 
@@ -1103,9 +1249,14 @@ def _available_ring_atom_indices(
         Chem.SanitizeMol(sanitized)
     except Exception:
         return []
+    ring_atoms = _ring_atom_indices(sanitized, source_ring)
+    if any(sanitized.GetAtomWithIdx(idx).GetAtomicNum() == 0 for idx in ring_atoms):
+        # Unknown ring atoms can change aromaticity and available hydrogens.
+        # Enumerating sites before their identities are known can over-substitute.
+        return []
     return [
         atom_idx
-        for atom_idx in _ring_atom_indices(sanitized, source_ring)
+        for atom_idx in ring_atoms
         if sanitized.GetAtomWithIdx(atom_idx).GetNumImplicitHs() > 0
     ]
 
@@ -1335,6 +1486,11 @@ def _format_preserved_group_outputs(
     outputs: set[str] = set()
     annotations = annotation_variants or [""]
     for state in states:
+        for desc in Translator.parse_groups(preserved_groups):
+            if isinstance(desc.id, AtomIndex) and _find_atom_by_source_index(state, int(desc.id)) is None:
+                raise chem_utils.UnmappableAnnotationError(
+                    f"Retained group references removed atom {int(desc.id)}"
+                )
         smiles = _canonical_smiles(state)
         for annotation in annotations:
             remap_mol = Chem.Mol(state)
@@ -1455,12 +1611,49 @@ def _substitute_markush_outputs(
 
         fragments = _resolve_group_smiles(desc, definitions)
         if not fragments:
+            if (
+                repeat_policy == "best_effort"
+                and isinstance(desc.id, AtomIndex)
+                and not desc.multiple
+            ):
+                partial = _partial_composite(
+                    desc.symbol or "", desc.script
+                )
+                if partial is not None:
+                    prefix, residual_label = partial
+                    try:
+                        states, residual_record = _expand_indexed_partial(
+                            states,
+                            desc,
+                            prefix,
+                            residual_label + (desc.prime or ""),
+                            source_index_floor=mol.GetNumAtoms(),
+                        )
+                    except (ValueError, RuntimeError):
+                        pass
+                    else:
+                        unresolved_group_records.append(residual_record)
+                        continue
             if repeat_policy == "best_effort":
                 unresolved_group_records.append(_group_record(desc))
                 continue
             raise ValueError(f"No Markush definition found for group `{str(desc)}`")
 
         if isinstance(desc.id, AtomIndex):
+            if repeat_policy == "best_effort" and any(
+                atom.GetAtomMapNum() == int(desc.id) + 1
+                and atom.GetAtomicNum() == 0
+                and (
+                    atom.GetDegree() != 1
+                    or any(bond.GetBondType() != Chem.BondType.SINGLE for bond in atom.GetBonds())
+                )
+                for state in states
+                for atom in state.GetAtoms()
+            ):
+                # Internal/saturated placeholders are not single-port groups.
+                # Keep them until an atom-replacement rule is explicitly supported.
+                unresolved_group_records.append(_group_record(desc))
+                continue
             copied_states = None
             if desc.multiple:
                 try:
