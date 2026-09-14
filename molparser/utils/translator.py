@@ -553,6 +553,24 @@ class Translator:
             "NH",
         )
         composite_descs = cls.parse_groups(groups)
+        atom_group_ids = [
+            int(desc.id)
+            for desc in composite_descs
+            if isinstance(desc.id, AtomIndex)
+            and not desc.is_circle
+            and not desc.is_dummy
+        ]
+        if len(atom_group_ids) != len(set(atom_group_ids)):
+            # Consuming one label by atom ID would also remove its siblings.
+            # Preserve ambiguous atom annotations before either expansion pass.
+            return TranslatedMolecule(
+                smi=smi,
+                groups=groups,
+                caption=caption,
+                esmi=cls.build_esmi(smi, groups, ext),
+                markush=True,
+                sru=cls.has_symbolic_sru(caption),
+            )
         composite_abbrevs = chem_utils.get_abbrev_smi()
 
         def keeps_an_open_site(desc: GroupDesc) -> bool:
