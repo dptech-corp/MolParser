@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum, unique
 from typing import Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union
 
@@ -522,6 +522,36 @@ class Translator:
             )
 
         groups, ext = cls.parse_trailing(trailing)
+
+        # Give composite abbreviations one best-effort pass before the legacy
+        # atom-group loop.  substitute_markush remaps retained atom records,
+        # so recursive refactor sees current atom indices.
+        composite_symbols = (
+            "SO2",
+            "CO2",
+            "CO",
+            "CH2",
+            "CF2",
+            "NH",
+        )
+        if any(
+            desc.symbol
+            and any(token in desc.symbol for token in composite_symbols)
+            for desc in cls.parse_groups(groups)
+        ):
+            try:
+                expanded = cls.substitute_markush(
+                    caption,
+                    {},
+                    error_msg=error_msg,
+                    repeat_policy="best_effort",
+                )
+            except (ValueError, RuntimeError):
+                expanded = caption
+            if isinstance(expanded, str) and expanded != caption:
+                translated = cls.refactor(expanded, error_msg=error_msg)
+                if translated is not None:
+                    return replace(translated, caption=caption)
 
         try:
             abbrev_map = chem_utils.get_abbrev_smi()
