@@ -128,7 +128,7 @@ Common extension records:
 - `<s>...</s>` — repository compatibility extension for nested substructure records
 - `<g>[3:2]:[5:6]:|Sg:n|</g>` — local s-group repeat record with two inner/outer boundary ports
 - `<v>0:A:[0:2]</v>` — virtualArc record
-- `<x>[10:11]:Sa</x>` — biaryl axial configuration (`Ra` or `Sa`), with axis atom indexes in ascending order
+- `<x>[10:11]:Sa</x>` — axial configuration (`Ra` or `Sa`); `ATOM_1` and `ATOM_2` are the terminal reference points of the stereogenic axis in ascending order
 - `|Sg:n|` — structural repeating unit (SRU) marker
 - `?n` — local substructure multiplicity suffixes
 

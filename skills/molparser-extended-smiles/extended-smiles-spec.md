@@ -96,17 +96,26 @@ do not add `</dum>`.
 C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 ```
 
-### Biaryl Axial Chirality
+### Axial Chirality (Stereogenic Axis)
+
+A stereogenic axis uses a single `<x></x>` record. The former biaryl-bond
+endpoints are generalized to the terminal reference points of the chiral-axis
+vector:
 
 ```text
 <x>[ATOM_1:ATOM_2]:[STATE]</x>
 ```
 
-- `ATOM_1` and `ATOM_2` are the zero-based atoms at the two ends of the
-  stereogenic biaryl axis.
-- The atoms must be directly bonded, aromatic, and written with
-  `ATOM_1 < ATOM_2`.
-- `STATE` is `Ra` or `Sa`. Atom order is not reversed to change the state.
+- `ATOM_1` and `ATOM_2` are the zero-based key atom indexes that span the
+  topology of the chiral axis. They must satisfy `ATOM_1 < ATOM_2`.
+- `[ATOM_1:ATOM_2]` uniquely locks the skeleton that carries the axial
+  chirality: the two atoms of a hindered single bond, or the key atoms at
+  both ends of the principal axis in a multi-atom cumulene or orthogonal
+  system.
+- `STATE` is the absolute axial configuration:
+  - `Ra`: R axial
+  - `Sa`: S axial
+- Atom order is not reversed to change the state.
 - Normalized E-SMILES preserves this record and remaps both atom indexes after
   abbreviation substitution or canonicalization. Plain SMILES output ignores
   the annotation; current utilities do not assign RDKit axial stereochemistry.
@@ -117,6 +126,15 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 ```text
 Nc1ccc2ccccc2c1-c1c(O)ccc2ccccc12<sep><x>[10:11]:Sa</x>
 ```
+
+| Axial chirality type | Topology / atropisomerism | Axis-end atom rule | Example |
+| --- | --- | --- | --- |
+| Biaryl systems | Hindered single-bond rotation (C–C) | Atom indexes of the C–C single bond joining the two aryl rings | `<x>[5:12]:Ra</x>` |
+| Aryl–alkenyl / diene systems | Hindered single-bond rotation (C–C) | Aryl carbon and alkenyl α-carbon indexes | `<x>[4:9]:Sa</x>` |
+| Aryl amide / imide systems | Hindered single-bond rotation (C–N) | Aryl carbon and amide nitrogen indexes | `<x>[6:7]:Ra</x>` |
+| Allene / cumulene systems | Orthogonal cumulative double-bond π-orbitals | Terminal sp² carbon indexes | `<x>[2:4]:Sa</x>` |
+| Alkylidenecycloalkanes | Ring orthogonal to the double bond | Ring attachment atom and terminal alkene carbon indexes | `<x>[3:8]:Sa</x>` |
+| Spiro compounds | Orthogonal geometry at the spiro atom | Distal atoms at both ends of the principal axis through the spiro atom (para vertices) | `<x>[1:10]:Ra</x>` |
 
 ## 3. Multiplicity And Structural Repetition
 
@@ -231,7 +249,7 @@ The current token set does not encode:
 - coordination or dative-bond semantics beyond the representational scope of standard SMILES (e.g., metal complexes);
 - electron-transfer arrows;
 - uncertain bond styles;
-- uncertain chirality and axial chirality outside the supported biaryl case.
+- uncertain chirality, including axial chirality whose absolute configuration is not a definite `Ra` or `Sa`.
 
 Preserve the encodable backbone, do not invent tokens, and report unencoded chemistry explicitly.
 
@@ -241,7 +259,7 @@ Preserve the encodable backbone, do not invent tokens, and report unencoded chem
 - balanced `<a>`, `<d>`, `<r>`, `<c>`, `<s>`, `<g>`, `<v>`, and `<x>` tags, allowing inline `<r><v>...</r>`;
 - non-negative indexes in the correct namespace;
 - `<d>...:<dum></d>` and legacy `<a>...:<dum></a>` must index a dummy `*` atom;
-- `<x>` uses two directly bonded aromatic atom indexes in ascending order and a `Ra` or `Sa` state;
+- `<x>` uses two terminal reference atom indexes of a stereogenic axis in ascending order (`ATOM_1 < ATOM_2`) and a `Ra` or `Sa` state;
 - no whitespace inside group labels;
 - special labels use exactly `<a>[ATOM_INDEX]:<id>[NOTE]</a>` with a non-empty,
   whitespace-free `NOTE` that contains no `]` and has no `?` multiplicity

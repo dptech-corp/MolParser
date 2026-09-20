@@ -17,7 +17,7 @@ Use this guide after `extended-smiles-spec.md` when a visual example is needed. 
 9. Use `<g>` for an s-group repeat with `[INNER_PORT:OUTER_PORT]` pairs and `|Sg:COUNT|`.
 10. Use `?n`, `?1-3`, or `?3` for local substructure multiplicity.
 11. Use top-level `|Sg:COUNT|` for a whole structural repeating unit.
-12. Use `<x>[ATOM_1:ATOM_2]:Ra</x>` or `:Sa</x>` for a biaryl stereogenic axis; use the directly bonded aromatic axis atoms in ascending index order.
+12. Use `<x>[ATOM_1:ATOM_2]:Ra</x>` or `:Sa</x>` for a stereogenic axis; `ATOM_1` and `ATOM_2` are the terminal reference points of the chiral axis and must be written in ascending index order.
 13. Do not invent tokens for unsupported chemistry. Preserve the encodable backbone and report the unsupported feature separately.
 
 ## Encoding and Rendering Examples
@@ -155,12 +155,26 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><v>0:A:[0:2]</v><r><v>0:R[3]</r>
 
 ![VirtualArc with attached group rendering](assets/images/virtual_arc_with_r3.svg)
 
-### 13. Biaryl axial chirality
+### 13. Axial chirality (stereogenic axis)
 
-The supplied source figure explicitly marks the axis as `aR`, encoded as
-`<x>[7:8]:Ra</x>`. The two indexes identify directly bonded aromatic atoms and
-must be ascending. Use the source's absolute configuration annotation; do not
-infer `Ra` or `Sa` from the page orientation. The tetrahedral center's `@@`
+Use `<x>[ATOM_1:ATOM_2]:Ra</x>` or `:Sa</x>` for a stereogenic axis. The two
+indexes are the terminal reference points of the chiral axis and must be
+ascending. They uniquely lock the skeleton that carries the axis: the two
+atoms of a hindered single bond, or the key end atoms of a multi-atom
+cumulene or orthogonal system. Use the source's absolute configuration
+annotation; do not infer `Ra` or `Sa` from the page orientation.
+
+| Axial chirality type | Topology / atropisomerism | Axis-end atom rule | Example |
+| --- | --- | --- | --- |
+| Biaryl systems | Hindered single-bond rotation (C–C) | Atom indexes of the C–C single bond joining the two aryl rings | `<x>[5:12]:Ra</x>` |
+| Aryl–alkenyl / diene systems | Hindered single-bond rotation (C–C) | Aryl carbon and alkenyl α-carbon indexes | `<x>[4:9]:Sa</x>` |
+| Aryl amide / imide systems | Hindered single-bond rotation (C–N) | Aryl carbon and amide nitrogen indexes | `<x>[6:7]:Ra</x>` |
+| Allene / cumulene systems | Orthogonal cumulative double-bond π-orbitals | Terminal sp² carbon indexes | `<x>[2:4]:Sa</x>` |
+| Alkylidenecycloalkanes | Ring orthogonal to the double bond | Ring attachment atom and terminal alkene carbon indexes | `<x>[3:8]:Sa</x>` |
+| Spiro compounds | Orthogonal geometry at the spiro atom | Distal atoms at both ends of the principal axis through the spiro atom (para vertices) | `<x>[1:10]:Ra</x>` |
+
+The supplied source figure is a biaryl example that explicitly marks the
+axis as `aR`, encoded as `<x>[7:8]:Ra</x>`. The tetrahedral center's `@@`
 annotation is separate from the axial `<x>` record.
 
 ```text
