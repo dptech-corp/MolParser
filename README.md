@@ -49,7 +49,7 @@ parser = MolParser()
 # default config : molparser/models/config.yaml
 # default device : "auto"  (or "cpu" / "cuda")
 # default MolDet model : UniParser/MolDetv2   (auto-download)
-# default OCSR model : UniParser/MolParser-Mobile  (auto-download)
+# default OCSR model : UniParser/MolParser-Mobile-V2  (auto-download)
 
 # Single image path.
 image_results = parser.parse("mol.png", rec_only=True)
@@ -242,7 +242,6 @@ C[C@@H](O)[C@H]1N*(=O)[C@@H](CCCCN)NC(=O)CNC(=O)CNC(=O)[C@H](CC(N)=O)NC(=O)[C@H]
 
 ![Large stereochemical atom-Markush rendering](skills/molparser-extended-smiles/assets/images/macrocyclic-peptide-markush-x.svg)
 
-
 ###### VirtualArc with an attached group (new in E-SMILES2.0 spec)
 
 ```text
@@ -272,7 +271,6 @@ CC(=O)NCOCCC1CC1<sep><g>[5:4]:[6:7]:|Sg:n|</g>
 ```
 
 ![Local s-group repeat rendering](skills/molparser-extended-smiles/assets/images/sgroup-local-ether-repeat-n.svg)
-
 
 See the [E-SMILES Figure Guide](skills/molparser-extended-smiles/figure-index.md) for the complete, consistently formatted visual example set.
 
