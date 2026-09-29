@@ -10,7 +10,7 @@ Supported extension records:
   - <s>[SUBSTRUCTURE_ESMILES]</s>
   - <g>[INNER_PORT:OUTER_PORT]:...:|Sg:n|</g>
   - <v>[VIRTUALARC_INDEX]:[VIRTUALARC_NAME]:[FROM_ATOM:TO_ATOM]</v>
-  - <x>[ATOM_1:ATOM_2]:[STATE]</x> (biphenyl axial chirality)
+  - <x>[ATOM_1:ATOM_2]:[STATE]</x> (axial chirality / stereogenic axis)
   - |Sg:n| (structural repeating unit marker)
 
 Notes:
@@ -300,6 +300,12 @@ def _validate_virtual_arc(
 
 
 def _validate_axial(body: str, messages: list[Message], mol=None) -> None:
+    """Validate <x> syntax and index bounds.
+
+    Endpoints are terminal reference points of a stereogenic axis. They may
+    be a hindered single bond or the distal atoms of a cumulene / orthogonal
+    system, so they need not be directly bonded or aromatic.
+    """
     match = AXIAL_RE.fullmatch(body.strip())
     if match is None:
         add(
@@ -311,14 +317,10 @@ def _validate_axial(body: str, messages: list[Message], mol=None) -> None:
     first, second = int(match.group("first")), int(match.group("second"))
     if first >= second:
         add(messages, "error", "<x> requires ATOM_1 < ATOM_2")
-    if mol is None or first >= mol.GetNumAtoms() or second >= mol.GetNumAtoms():
-        if mol is not None:
-            add(messages, "error", "<x> atom index is outside the base molecule")
-        return
-    if mol.GetBondBetweenAtoms(first, second) is None:
-        add(messages, "error", "<x> axis atoms must be directly bonded")
-    if not all(mol.GetAtomWithIdx(index).GetIsAromatic() for index in (first, second)):
-        add(messages, "error", "<x> axis atoms must both be aromatic")
+    if mol is not None and (
+        first >= mol.GetNumAtoms() or second >= mol.GetNumAtoms()
+    ):
+        add(messages, "error", "<x> atom index is outside the base molecule")
 
 
 def validate(esmiles: str, strict: bool = False) -> list[Message]:

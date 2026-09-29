@@ -49,7 +49,7 @@ parser = MolParser()
 # default config : molparser/models/config.yaml
 # default device : "auto"  (or "cpu" / "cuda")
 # default MolDet model : UniParser/MolDetv2   (auto-download)
-# default OCSR model : UniParser/MolParser-Mobile  (auto-download)
+# default OCSR model : UniParser/MolParser-Mobile-V2  (auto-download)
 
 # Single image path.
 image_results = parser.parse("mol.png", rec_only=True)
@@ -128,7 +128,7 @@ Common extension records:
 - `<s>...</s>` — repository compatibility extension for nested substructure records
 - `<g>[3:2]:[5:6]:|Sg:n|</g>` — local s-group repeat record with two inner/outer boundary ports
 - `<v>0:A:[0:2]</v>` — virtualArc record
-- `<x>[10:11]:Sa</x>` — biaryl axial configuration (`Ra` or `Sa`), with axis atom indexes in ascending order
+- `<x>[10:11]:Sa</x>` — axial configuration (`Ra` or `Sa`); `ATOM_1` and `ATOM_2` are the terminal reference points of the stereogenic axis in ascending order
 - `|Sg:n|` — structural repeating unit (SRU) marker
 - `?n` — local substructure multiplicity suffixes
 
@@ -242,7 +242,6 @@ C[C@@H](O)[C@H]1N*(=O)[C@@H](CCCCN)NC(=O)CNC(=O)CNC(=O)[C@H](CC(N)=O)NC(=O)[C@H]
 
 ![Large stereochemical atom-Markush rendering](skills/molparser-extended-smiles/assets/images/macrocyclic-peptide-markush-x.svg)
 
-
 ###### VirtualArc with an attached group (new in E-SMILES2.0 spec)
 
 ```text
@@ -272,7 +271,6 @@ CC(=O)NCOCCC1CC1<sep><g>[5:4]:[6:7]:|Sg:n|</g>
 ```
 
 ![Local s-group repeat rendering](skills/molparser-extended-smiles/assets/images/sgroup-local-ether-repeat-n.svg)
-
 
 See the [E-SMILES Figure Guide](skills/molparser-extended-smiles/figure-index.md) for the complete, consistently formatted visual example set.
 

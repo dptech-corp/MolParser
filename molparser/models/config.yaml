@@ -12,8 +12,8 @@ moldet:
   expand_px: 2
 
 molparser:
-  hf_repo: UniParser/MolParser-Mobile
-  modelscope_repo: UniParser/MolParser-Mobile
+  hf_repo: UniParser/MolParser-Mobile-V2
+  modelscope_repo: UniParser/MolParser-Mobile-V2
   model_path: ""
   max_length: 256
   batch_size: 32

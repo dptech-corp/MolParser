@@ -1,6 +1,6 @@
 ---
 name: molparser-extended-smiles
-description: "Use for MolParser E-SMILES generation, validation, normalization, abbreviation substitution, Markush definition substitution, rendering, and repair in OCSR/Markush workflows, including atom-indexed substituents, regio-uncertain ring attachments, abstract-ring superatoms, dummy attachment points, local substructure multiplicity suffixes, virtual arcs, biaryl axial chirality, SRU repeat markers, and MolParser colored endpoint-ball labels."
+description: "Use for MolParser E-SMILES generation, validation, normalization, abbreviation substitution, Markush definition substitution, rendering, and repair in OCSR/Markush workflows, including atom-indexed substituents, regio-uncertain ring attachments, abstract-ring superatoms, dummy attachment points, local substructure multiplicity suffixes, virtual arcs, axial chirality (stereogenic axis), SRU repeat markers, and MolParser colored endpoint-ball labels."
 ---
 
 # MolParser E-SMILES Skill
@@ -19,7 +19,7 @@ Use this skill when reading, writing, validating, normalizing, or rendering MolP
    - `<d>[ATOM_INDEX]:<dum></d>`: explicit dummy attachment point. This is the E-SMILES 2.0 form; legacy `<a>[ATOM_INDEX]:<dum></a>` is still accepted.
    - `<v>[VIRTUALARC_INDEX]:[VIRTUALARC_NAME]:[FROM_ATOM:TO_ATOM]</v>`: E-SMILES 2.0 virtualArc annotation for an abstract connection, not a chemical bond; the name field may be empty.
    - `<r><v>[VIRTUALARC_INDEX]:[GROUP_LABEL]</r>`: substituent attached to a virtualArc.
-   - `<x>[ATOM_1:ATOM_2]:[STATE]</x>`: biaryl axial chirality, where the directly bonded aromatic axis atoms satisfy `ATOM_1 < ATOM_2` and `STATE` is `Ra` or `Sa`.
+   - `<x>[ATOM_1:ATOM_2]:[STATE]</x>`: stereogenic-axis chirality. `ATOM_1` and `ATOM_2` are the terminal reference points of the chiral axis (`ATOM_1 < ATOM_2`); `STATE` is `Ra` or `Sa`.
    - `<s>[SUBSTRUCTURE_ESMILES]</s>`: repository compatibility extension for nested substructure records.
    - `<g>[INNER_PORT:OUTER_PORT]:...:|Sg:n|</g>`: E-SMILES 2.0 local s-group repeat record.
    - `?n`, `?1-3`, `?3`: local substructure multiplicity suffix on a group label.
@@ -142,7 +142,7 @@ Markush expansion.
 - Nested `<s>` records may contain an additional `<sep>` for the substructure E-SMILES.
 - `<a>` indexes atoms; `<d>` must index an explicit dummy `*` attachment point; `<r>` indexes rings; `<c>` indexes the dummy atom carrying the abstract-ring label.
 - `<v>` indexes virtualArc annotations in a separate namespace; `<r><v>0:R[3]</r>` attaches an unresolved group to virtualArc `0`.
-- `<x>[ATOM_1:ATOM_2]:Ra</x>` and `<x>[ATOM_1:ATOM_2]:Sa</x>` identify the directly bonded aromatic atoms defining a biaryl stereogenic axis. Both indexes use the base-SMILES atom namespace and must be written in ascending order.
+- `<x>[ATOM_1:ATOM_2]:Ra</x>` and `<x>[ATOM_1:ATOM_2]:Sa</x>` identify the terminal reference atoms of a stereogenic axis. Both indexes use the base-SMILES atom namespace and must satisfy `ATOM_1 < ATOM_2`. For a hindered single bond they are the two bond atoms; for a multi-atom cumulene or orthogonal system they are the key atoms at both ends of the principal axis. See `extended-smiles-spec.md` for axis-end rules by scaffold type.
 - A virtualArc name may be empty. The repository's normalization convention is to emit endpoint pairs with `start < end`, sort multiple pairs lexicographically, assign consecutive ids, and rebind `<r><v>` references; continue accepting reversed endpoints when reading. This convention is separate from the E-SMILES 2.0 requirement that `<x>` axis indexes be ascending.
 - `<g>` port pairs use `[INNER_PORT:OUTER_PORT]`; repeat count defaults to `n` and may be explicit, e.g. `|Sg:20|`.
 - `GROUP_LABEL` may be a common abbreviation (`Me`, `OMe`, `CF3`) or a Markush label (`R[1]`). Use `<id>[NOTE]` only as an atom-indexed `<a>` payload, with a non-empty, whitespace-free `NOTE` that contains no `]` and has no multiplicity suffix. Endpoint-ball rendering on `*` is only a visual treatment of approved `<id>` values; it is not a separate token or chemical identity. For dummy attachment points, prefer `<d>[ATOM_INDEX]:<dum></d>` and accept legacy `<a>[ATOM_INDEX]:<dum></a>`.
