@@ -87,12 +87,25 @@ class AtomIndex(Index):
 
 
 class RingIndex(Index):
-    def __init__(self, value: int, virtual: bool = False) -> None:
+    def __init__(
+        self,
+        value: int,
+        virtual: bool = False,
+        indices: tuple[int, ...] | None = None,
+    ) -> None:
         self._virtual = virtual
         self._key = 2_000_000 if self._virtual else 1_000_000
+        if indices is None:
+            self._indices = (int(value),)
+        else:
+            self._indices = tuple(dict.fromkeys(int(index) for index in indices))
+        if not self._indices or self._indices[0] != int(value):
+            raise ValueError("RingIndex indices must start with the primary index")
 
     def __hash__(self):
-        return hash(("ring", int(self), self._virtual))
+        if self._indices == (int(self),):
+            return hash(("ring", int(self), self._virtual))
+        return hash(("ring", self._indices, self._virtual))
 
     def __eq__(self, other):
         if isinstance(other, RingIndex):
@@ -102,6 +115,11 @@ class RingIndex(Index):
     @property
     def virtual(self) -> bool:
         return self._virtual
+
+    @property
+    def indices(self) -> tuple[int, ...]:
+        """Zero-based ring indexes this substituent may occupy."""
+        return self._indices
 
     @property
     def key(self) -> bool | int:
@@ -146,7 +164,7 @@ class Patterns:
     )
     grp_pattern = re.compile(
         rf"({Tokens.atom_start}|{Tokens.circ_start}|{Tokens.dummy_start}|{Tokens.ring_start}|{Tokens.ring_start}{Tokens.circ_start}|{Tokens.ring_start}{Tokens.virtual_start})"
-        + r"(\d+:\S+?)"
+        + r"(\d+(?:,\d+)*:\S+?)"
         + rf"({Tokens.atom_end}|{Tokens.circ_end}|{Tokens.dummy_end}|{Tokens.ring_end})"
     )
     trail_pattern = re.compile(
@@ -298,7 +316,10 @@ class Translator:
             parsed = cls.parse_group(grp_content)
             if parsed is None:
                 continue
-            idx, grp_text = parsed
+            indexes, grp_text = parsed
+            if len(indexes) != 1 and grp_start != Tokens.ring_start:
+                continue
+            idx = indexes[0]
             if grp_start in (Tokens.atom_start, Tokens.dummy_start):
                 grp_desc = GroupDesc(id=AtomIndex(idx))
                 if len(grp_text) == 0 or grp_start == Tokens.dummy_start:
@@ -311,7 +332,7 @@ class Translator:
             ):
                 grp_desc = GroupDesc(id=RingIndex(idx, virtual=True))
             elif grp_start == Tokens.ring_start:
-                grp_desc = GroupDesc(id=RingIndex(idx))
+                grp_desc = GroupDesc(id=RingIndex(idx, indices=indexes))
             else:
                 continue
             grp_desc.symbol = grp_text.get(TextType.SYMBOL)
@@ -322,20 +343,22 @@ class Translator:
         return descriptions
 
     @classmethod
-    def parse_group(cls, group: str) -> Optional[Tuple[int, Dict[TextType, str]]]:
+    def parse_group(
+        cls, group: str
+    ) -> Optional[Tuple[tuple[int, ...], Dict[TextType, str]]]:
         items = group.split(":")
         if len(items) != 2:
             return
         idx, content = items
-        if not idx.isdigit():
+        if re.fullmatch(r"\d+(?:,\d+)*", idx) is None:
             return
-        idx = int(idx)
+        indexes = tuple(dict.fromkeys(int(part) for part in idx.split(",")))
         if content == Tokens.dummy:
-            return idx, {}
+            return indexes, {}
         grp_text = cls.get_group_texts(content)
         if len(grp_text) == 0:
             return
-        return idx, grp_text
+        return indexes, grp_text
 
     @classmethod
     def get_group_texts(cls, content: str) -> Dict[TextType, str]:
@@ -681,7 +704,9 @@ class Translator:
                         is_markush = True
                         continue
                 elif isinstance(desc.id, RingIndex):
-                    if not desc.id.virtual and int(desc.id) >= len(ring_info):
+                    if not desc.id.virtual and any(
+                        index >= len(ring_info) for index in desc.id.indices
+                    ):
                         continue
                     is_markush = True
                     continue

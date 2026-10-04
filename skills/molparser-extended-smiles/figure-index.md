@@ -10,7 +10,7 @@ Use this guide after `extended-smiles-spec.md` when a visual example is needed. 
    Encode a special label as `<id>[NOTE]`: draw `NOTE` as text unless the
    indexed atom is `*` and `NOTE` is an approved endpoint-ball token.
 4. Use `<d>` for explicit dummy attachment points. Continue accepting legacy `<a>[ATOM_INDEX]:<dum></a>` input.
-5. Use `<r>` when a substituent belongs to a ring but its exact attachment atom is unspecified.
+5. Use `<r>` when a substituent belongs to a ring but its exact attachment atom is unspecified. Separate several ring indexes with commas when it may occupy any of those rings, as in `<r>0,1:R[1]</r>`.
 6. Use `<c>` for an abstract-ring or superatom label carried by a dummy atom.
 7. Use `<v>` for a virtualArc and `<r><v>...</r>` for a group attached to that virtualArc.
 8. The repository compatibility extension `<s>` supports one level of nested substructure records outside the main ring system.
@@ -74,7 +74,7 @@ This atom-indexed syntax allows assigning approved color names to render `*` ato
 
 ### 5. Regio-uncertain ring substituent
 
-Use `<r>[RING_INDEX]:[GROUP_LABEL]</r>` when the exact attachment atom on a ring is unknown. Append `?1-3` when one to three copies are possible.
+Use `<r>[RING_INDEX]:[GROUP_LABEL]</r>` when the exact attachment atom on a ring is unknown. Append `?1-3` when one to three copies are possible. Use `<r>0,1:R[1]</r>` when the same substituent may occupy any substitutable atom on more than one listed ring.
 
 ```text
 *C(O)c1cc(C(=O)N(*)*)cc(-c2*ccc*2)c1<sep><a>0:CF3</a><a>9:R[3]</a><a>10:R[2]</a><a>14:X</a><a>18:Y</a><r>1:R[1]?1-3</r>

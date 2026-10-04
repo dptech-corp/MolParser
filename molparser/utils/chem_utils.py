@@ -169,11 +169,19 @@ def _strip_preserved_records(groups: str) -> str:
     return _PRESERVED_RECORD_PATTERN.sub("", groups)
 
 
-def split_groups(groups: str) -> Tuple[Dict[int, Dict[str, str]], Dict[int, List[str]]]:
+def _ring_index_key(index_text: str) -> tuple[int, ...] | None:
+    if re.fullmatch(r"\d+(?:,\d+)*", index_text) is None:
+        return None
+    return tuple(dict.fromkeys(int(part) for part in index_text.split(",")))
+
+
+def split_groups(
+    groups: str,
+) -> Tuple[Dict[int, Dict[str, str]], Dict[tuple[int, ...], List[str]]]:
     pattern = r"<(?P<type>r|a|d)>(?P<content>.*?)</(?P=type)>"
     matches = re.finditer(pattern, _strip_preserved_records(groups))
     a_groups: Dict[int, Dict[str, str]] = {}
-    r_groups: Dict[int, List[str]] = {}
+    r_groups: Dict[tuple[int, ...], List[str]] = {}
 
     for m in matches:
         type_ = m.group("type")
@@ -182,16 +190,20 @@ def split_groups(groups: str) -> Tuple[Dict[int, Dict[str, str]], Dict[int, List
             ind, content = text.split(":", 1)
         else:
             ind, content = "", text
-        if not ind.isdigit():
+        indexes = _ring_index_key(ind)
+        if indexes is None:
             continue
         if type_ == "r":
-            r_groups.setdefault(int(ind), []).append(content)
-        else:
-            a_groups[int(ind)] = {"content": content, "type": type_}
+            r_groups.setdefault(indexes, []).append(content)
+        elif len(indexes) == 1:
+            a_groups[indexes[0]] = {"content": content, "type": type_}
     return a_groups, r_groups
 
 
-def get_groups_str(a_groups: Dict[int, Dict], r_groups: Dict[int, Dict] | None = None) -> str:
+def get_groups_str(
+    a_groups: Dict[int, Dict],
+    r_groups: Dict[tuple[int, ...], Dict] | None = None,
+) -> str:
     groups_str = ""
     for k, v in sorted(a_groups.items(), key=lambda x: x[0]):
         tag = v.get("type", "a")
@@ -199,8 +211,9 @@ def get_groups_str(a_groups: Dict[int, Dict], r_groups: Dict[int, Dict] | None =
     if r_groups is not None:
         for k, v in sorted(r_groups.items(), key=lambda x: x[0]):
             contents = v["content"] if isinstance(v["content"], list) else [v["content"]]
+            index_text = ",".join(str(index) for index in k)
             for content in contents:
-                groups_str += f"<r>{k}:{content}</r>"
+                groups_str += f"<r>{index_text}:{content}</r>"
     return groups_str
 
 
@@ -299,7 +312,7 @@ def remap_groups(mol: Chem.rdchem.Mol, groups: str, ring_info: tuple) -> str:
         if group is not None:
             new_ind2agroup[new_ind] = group
 
-    new_ind2rgroup: Dict[int, Dict] = {}
+    new_ind2rgroup: Dict[tuple[int, ...], Dict] = {}
     if old_ind2rgroup:
         new_ring_info = output_mol.GetRingInfo().AtomRings() if output_mol is not None else ()
         new_ring_sets = [set(ring) for ring in new_ring_info]
@@ -319,12 +332,19 @@ def remap_groups(mol: Chem.rdchem.Mol, groups: str, ring_info: tuple) -> str:
                     best_match = new_idx
             ring_map[orig_idx] = best_match if best_overlap > 0 else None
 
-        for old_ind, group_list in old_ind2rgroup.items():
-            new_ring_idx = ring_map.get(old_ind)
-            if new_ring_idx is None:
+        for old_inds, group_list in old_ind2rgroup.items():
+            new_inds: list[int] = []
+            for old_ind in old_inds:
+                new_ring_idx = ring_map.get(old_ind)
+                if new_ring_idx is None:
+                    new_inds = []
+                    break
+                if new_ring_idx not in new_inds:
+                    new_inds.append(new_ring_idx)
+            if not new_inds:
                 continue
             entry = new_ind2rgroup.setdefault(
-                new_ring_idx, {"content": [], "type": "r"}
+                tuple(new_inds), {"content": [], "type": "r"}
             )
             entry["content"].extend(group_list)
 

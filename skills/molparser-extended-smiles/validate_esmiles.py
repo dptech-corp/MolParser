@@ -5,6 +5,7 @@ Supported extension records:
   - <a>[ATOM_INDEX]:<id>[NOTE]</a>
   - <d>[ATOM_INDEX]:<dum></d>
   - <r>[RING_INDEX]:[GROUP_NAME]</r>
+  - <r>[RING_INDEX_1],[RING_INDEX_2],...:[GROUP_NAME]</r>
   - <r><v>[VIRTUALARC_INDEX]:[GROUP_NAME]</r>
   - <c>[ATOM_INDEX]:[RING_LABEL]</c>
   - <s>[SUBSTRUCTURE_ESMILES]</s>
@@ -35,6 +36,10 @@ SGROUP_RE = re.compile(r"<g>(?P<body>.*?)</g>", re.DOTALL)
 VIRTUAL_RE = re.compile(r"<v>(?P<body>.*?)</v>", re.DOTALL)
 SG_RE = re.compile(r"\|Sg:(?P<count>[^|]+)\|")
 INDEX_VALUE_RE = re.compile(r"^(?P<index>\d+):(?P<value>.+)$", re.DOTALL)
+RING_INDEXES_RE = re.compile(
+    r"^(?P<indexes>\d+(?:,\d+)+):(?P<value>.+)$",
+    re.DOTALL,
+)
 RING_VIRTUAL_C_RE = re.compile(r"^<c>(?P<index>\d+):(?P<value>.+)$", re.DOTALL)
 RING_VIRTUAL_V_RE = re.compile(
     r"^<v>\s*(?P<index>\d+):(?P<value>.+)$",
@@ -94,7 +99,13 @@ def _validate_record(
 ) -> tuple[str, int] | None:
     stripped = body.strip()
     match = INDEX_VALUE_RE.match(stripped)
+    ring_indexes: list[int] | None = None
     namespace = "ring" if tag == "r" else "atom"
+    if not match and tag == "r":
+        multi = RING_INDEXES_RE.match(stripped)
+        if multi:
+            ring_indexes = [int(part) for part in multi.group("indexes").split(",")]
+            match = multi
     if not match and tag == "r":
         # Advanced source-level form accepted by current molparser.utils parsing:
         # <r><c>[INDEX]:[VALUE]</r>
@@ -110,15 +121,15 @@ def _validate_record(
         add(messages, "error", f"<{tag}> should use [INDEX]:[VALUE], got: {body!r}")
         return None
 
-    index = match.group("index")
+    index = match.groupdict().get("index")
     value = match.group("value").strip()
-    if not index.isdigit():
+    if ring_indexes is None and (index is None or not index.isdigit()):
         add(messages, "error", f"<{tag}> index is not a non-negative integer: {index!r}")
     if not value:
         add(messages, "error", f"<{tag}> value is empty")
         return None
 
-    numeric_index = int(index)
+    numeric_index = int(index) if index is not None else ring_indexes[0]
     record_info = (
         (namespace, numeric_index) if namespace == "virtual_arc" else None
     )
@@ -129,13 +140,15 @@ def _validate_record(
             f"<{tag}> atom index {numeric_index} is outside the base molecule "
             f"(atom count {atom_count})",
         )
-    elif namespace == "ring" and ring_count is not None and numeric_index >= ring_count:
-        add(
-            messages,
-            "error",
-            f"<r> ring index {numeric_index} is outside the base molecule "
-            f"(ring count {ring_count})",
-        )
+    elif namespace == "ring" and ring_count is not None:
+        for ring_index in ring_indexes or [numeric_index]:
+            if ring_index >= ring_count:
+                add(
+                    messages,
+                    "error",
+                    f"<r> ring index {ring_index} is outside the base molecule "
+                    f"(ring count {ring_count})",
+                )
 
     # Current molparser.utils parsing does not preserve group names containing spaces.
     if re.search(r"\s", value):
