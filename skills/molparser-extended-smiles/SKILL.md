@@ -14,7 +14,7 @@ Use this skill when reading, writing, validating, normalizing, or rendering MolP
 3. Add extension records only when the base SMILES cannot carry the annotation:
    - `<a>[ATOM_INDEX]:[GROUP_LABEL]</a>`: atom-indexed substituent or abbreviation.
    - `<a>[ATOM_INDEX]:<id>[NOTE]</a>`: atom-indexed special Markush label. The drawer shows `NOTE` as group text unless the indexed atom is `*` and `NOTE` is an approved endpoint-ball token.
-   - `<r>[RING_INDEX]:[GROUP_LABEL]</r>`: ring-indexed substituent with unspecified attachment atom.
+   - `<r>[RING_INDEX]:[GROUP_LABEL]</r>`: ring-indexed substituent with unspecified attachment atom. `<r>[RING_INDEX_1],[RING_INDEX_2],...:[GROUP_LABEL]</r>` places that substituent on any substitutable atom in any of the listed rings.
    - `<c>[ATOM_INDEX]:[RING_LABEL]</c>`: abstract-ring or superatom placeholder at a dummy atom.
    - `<d>[ATOM_INDEX]:<dum></d>`: explicit dummy attachment point. This is the E-SMILES 2.0 form; legacy `<a>[ATOM_INDEX]:<dum></a>` is still accepted.
    - `<v>[VIRTUALARC_INDEX]:[VIRTUALARC_NAME]:[FROM_ATOM:TO_ATOM]</v>`: E-SMILES 2.0 virtualArc annotation for an abstract connection, not a chemical bond; the name field may be empty.
@@ -82,6 +82,7 @@ result = mutils.substitute_markush(
   `mutils.substitute_markush("c1ccccc1<sep><r>0:R[1]</r>", {"R1": "Me"})`
   returns `"Cc1ccccc1"` after symmetry de-duplication, while
   `<r>0:R[1]?1-3</r>` returns a list for 1-3 methyl substitutions on benzene.
+  `<r>0,1:R[1]</r>` uses the union of rings 0 and 1 as that same site set.
 - Multiplicity suffixes `?3`, `?1-3`, and `?n` encode local substructure
   replication; `?n` reads the replication count from the definition
   dictionary, e.g. `<a>2:CH2?n</a>` with `{"n": 10}`.
@@ -140,7 +141,7 @@ Markush expansion.
 
 - Exactly one top-level `<sep>`.
 - Nested `<s>` records may contain an additional `<sep>` for the substructure E-SMILES.
-- `<a>` indexes atoms; `<d>` must index an explicit dummy `*` attachment point; `<r>` indexes rings; `<c>` indexes the dummy atom carrying the abstract-ring label.
+- `<a>` indexes atoms; `<d>` must index an explicit dummy `*` attachment point; `<r>` indexes rings, and may list several ring indexes separated by commas when one substituent may occupy any of those rings; `<c>` indexes the dummy atom carrying the abstract-ring label.
 - `<v>` indexes virtualArc annotations in a separate namespace; `<r><v>0:R[3]</r>` attaches an unresolved group to virtualArc `0`.
 - `<x>[ATOM_1:ATOM_2]:Ra</x>` and `<x>[ATOM_1:ATOM_2]:Sa</x>` identify the terminal reference atoms of a stereogenic axis. Both indexes use the base-SMILES atom namespace and must satisfy `ATOM_1 < ATOM_2`. For a hindered single bond they are the two bond atoms; for a multi-atom cumulene or orthogonal system they are the key atoms at both ends of the principal axis. See `extended-smiles-spec.md` for axis-end rules by scaffold type.
 - A virtualArc name may be empty. The repository's normalization convention is to emit endpoint pairs with `start < end`, sort multiple pairs lexicographically, assign consecutive ids, and rebind `<r><v>` references; continue accepting reversed endpoints when reading. This convention is separate from the E-SMILES 2.0 requirement that `<x>` axis indexes be ascending.

@@ -45,15 +45,21 @@ N(*)(*)C1=NC(NC(*)C(=O)N*)=NC(N(*)***C(=O)N(***)*)=N1<sep><a>12:<id>[DNA]</a>
 
 ```text
 <r>[RING_INDEX]:[GROUP_LABEL]</r>
+<r>[RING_INDEX_1],[RING_INDEX_2],...:[GROUP_LABEL]</r>
 ```
 
 - `RING_INDEX`: zero-based ring index, independent from atom indexes.
 - Use this when the substituent is attached to a ring but the exact attachment atom is regio-uncertain.
+- Comma-separated ring indexes name one substituent that may attach at any substitutable atom in any of the listed rings. The site set is the union of those rings. Duplicate indexes name the same ring once. This form is only for plain `<r>` records, not `<r><v>`.
 
 Example:
 
 ```text
 c1ccccc1<sep><r>0:R[1]</r><r>0:R[2]</r>
+```
+
+```text
+c1ccc2ccccc2c1<sep><r>0,1:R[1]</r>
 ```
 
 ### Abstract-Ring / Superatom Placeholder
@@ -201,6 +207,7 @@ C=CCC(C(C)*)*<sep><a>6:R[2]</a><a>7:R[1]</a><g>[3:2]:[4:5]:|Sg:20|</g>
 ## 5. Utility Behavior
 
 - `molparser.utils.postprocess_caption` / `Translator.refactor` canonicalize SMILES and substitute known atom-indexed abbreviations from `molparser/utils/abbrevs_example.csv` when the attachment is chemically valid.
+- A comma-separated `<r>` record enumerates attachment atoms from the union of the listed rings. `<r>0,1:R[1]</r>` with `{"R1": "Me"}` returns the distinct canonical methyl products on either ring. Multiplicity such as `?1-2` counts copies on that same union. An unresolved list is preserved, for example `<r>0,1:R[1]</r>`, and each listed ring index is remapped after canonicalization. If any listed ring cannot be remapped, that record is dropped rather than narrowed to the rings that remain.
 - `substitute_markush` checks complete user definitions first, then complete
   abbreviation matches, before attempting composite splitting. Supported
   linear prefixes include `SO2`, `CO2`, `CO`, `CH2`, `CF2`, `NH`, `N`, `O`,
@@ -257,7 +264,7 @@ Preserve the encodable backbone, do not invent tokens, and report unencoded chem
 
 - exactly one top-level `<sep>`; nested `<s>` records may contain their own `<sep>`;
 - balanced `<a>`, `<d>`, `<r>`, `<c>`, `<s>`, `<g>`, `<v>`, and `<x>` tags, allowing inline `<r><v>...</r>`;
-- non-negative indexes in the correct namespace;
+- non-negative indexes in the correct namespace; a plain `<r>` record may list several ring indexes separated by commas;
 - `<d>...:<dum></d>` and legacy `<a>...:<dum></a>` must index a dummy `*` atom;
 - `<x>` uses two terminal reference atom indexes of a stereogenic axis in ascending order (`ATOM_1 < ATOM_2`) and a `Ra` or `Sa` state;
 - no whitespace inside group labels;

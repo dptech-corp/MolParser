@@ -487,11 +487,13 @@ def _group_record(desc: GroupDesc) -> str:
     """Serialize one parsed top-level group for best-effort preservation."""
     if isinstance(desc.id, AtomIndex):
         tag = "d" if desc.is_dummy else "a"
+        index_text = str(int(desc.id))
     elif isinstance(desc.id, RingIndex) and not desc.id.virtual:
         tag = "r"
+        index_text = ",".join(str(index) for index in desc.id.indices)
     else:
         return ""
-    return f"<{tag}>{int(desc.id)}:{str(desc)}</{tag}>"
+    return f"<{tag}>{index_text}:{str(desc)}</{tag}>"
 
 
 def _repeat_counts(desc: GroupDesc, site_count: int) -> list[int]:
@@ -1415,6 +1417,23 @@ def _expand_atom_repetition(
     return next_states
 
 
+def _ring_source_atoms(
+    source_rings: tuple[tuple[int, ...], ...],
+    ring_indexes: tuple[int, ...],
+) -> list[int]:
+    """Union of atoms on the listed rings, in listed-ring then ring order."""
+    atoms: list[int] = []
+    seen: set[int] = set()
+    for ring_index in ring_indexes:
+        if ring_index >= len(source_rings):
+            raise ValueError(f"Ring index {ring_index} is out of range")
+        for atom_idx in source_rings[ring_index]:
+            if atom_idx not in seen:
+                seen.add(atom_idx)
+                atoms.append(atom_idx)
+    return atoms
+
+
 def _expand_ring_group(
     states: list[Chem.rdchem.RWMol],
     desc: GroupDesc,
@@ -1423,7 +1442,8 @@ def _expand_ring_group(
     definitions: Mapping[str, DefinitionValue],
     max_outputs: int,
 ) -> list[Chem.rdchem.RWMol] | None:
-    source_ring = source_rings[int(desc.id)]
+    ring_indexes = desc.id.indices if isinstance(desc.id, RingIndex) else (int(desc.id),)
+    source_atoms = _ring_source_atoms(source_rings, ring_indexes)
     next_states: list[Chem.rdchem.RWMol] = []
     counts = (
         [1]
@@ -1434,7 +1454,7 @@ def _expand_ring_group(
         return None
 
     for state in states:
-        sites = _available_ring_atom_indices(state, source_ring)
+        sites = _available_ring_atom_indices(state, source_atoms)
         if not sites:
             continue
         for count in counts:
@@ -1684,8 +1704,6 @@ def _substitute_markush_outputs(
                 max_outputs,
             )
         elif isinstance(desc.id, RingIndex):
-            if int(desc.id) >= len(source_rings):
-                raise ValueError(f"Ring index {int(desc.id)} is out of range")
             expanded_ring_states = _expand_ring_group(
                 states,
                 desc,

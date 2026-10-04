@@ -16,6 +16,7 @@ except ImportError:  # Support running from package directory as working directo
 
 
 _RAW_GROUP_PATTERN = re.compile(r"<(?P<tag>a|c|d|r)>(?P<idx>\d+):(?P<label>.+?)</(?P=tag)>")
+_RING_GROUP_PATTERN = re.compile(r"<r>(?P<idx>\d+(?:,\d+)*):(?P<label>.+?)</r>")
 _PRECOMPAT_PATTERN = re.compile(r"<s>.*?</s>|<g>.*?</g>|<v>.*?</v>", re.DOTALL)
 
 
@@ -67,6 +68,15 @@ def _apply_sru_sgroup(mol: Chem.rdchem.Mol, label: str = "n") -> None:
     sgroup.SetProp("CONNECT", "HT")
 
 
+def _ring_index_groups(groups: str) -> list[tuple[tuple[int, ...], str]]:
+    groups = _PRECOMPAT_PATTERN.sub("", groups)
+    records: list[tuple[tuple[int, ...], str]] = []
+    for match in _RING_GROUP_PATTERN.finditer(groups):
+        indexes = tuple(dict.fromkeys(int(part) for part in match.group("idx").split(",")))
+        records.append((indexes, match.group("label")))
+    return records
+
+
 def _add_ring_attachments(
     mol: Chem.rdchem.Mol,
     groups: str,
@@ -74,16 +84,21 @@ def _add_ring_attachments(
     """Represent ring-indexed groups as variable attachment dummy atoms."""
     ring_info = mol.GetRingInfo().AtomRings()
     attachments: list[tuple[int, tuple[int, ...]]] = []
-    ring_counts: dict[int, int] = {}
+    ring_counts: dict[tuple[int, ...], int] = {}
     used_anchor_atoms: set[int] = set()
     rw_mol = Chem.RWMol(mol)
 
-    for tag, ring_idx, label in _raw_groups(groups):
-        if tag != "r":
+    for ring_indexes, label in _ring_index_groups(groups):
+        if any(ring_idx >= len(ring_info) for ring_idx in ring_indexes):
             continue
-        if ring_idx >= len(ring_info):
-            continue
-        ring_atoms = tuple(ring_info[ring_idx])
+        ring_atoms_list: list[int] = []
+        seen_atoms: set[int] = set()
+        for ring_idx in ring_indexes:
+            for atom_idx in ring_info[ring_idx]:
+                if atom_idx not in seen_atoms:
+                    seen_atoms.add(atom_idx)
+                    ring_atoms_list.append(atom_idx)
+        ring_atoms = tuple(ring_atoms_list)
         substitutable_atoms = tuple(
             atom_idx
             for atom_idx in ring_atoms
@@ -102,9 +117,9 @@ def _add_ring_attachments(
             atom.SetProp("atomLabel", label)
         dummy_idx = rw_mol.AddAtom(atom)
         anchor_idx = available_atoms[
-            ring_counts.get(ring_idx, 0) % len(available_atoms)
+            ring_counts.get(ring_indexes, 0) % len(available_atoms)
         ]
-        ring_counts[ring_idx] = ring_counts.get(ring_idx, 0) + 1
+        ring_counts[ring_indexes] = ring_counts.get(ring_indexes, 0) + 1
         used_anchor_atoms.add(anchor_idx)
         rw_mol.AddBond(dummy_idx, anchor_idx, Chem.BondType.SINGLE)
         attachments.append((dummy_idx, substitutable_atoms))
