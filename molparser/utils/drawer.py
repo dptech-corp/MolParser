@@ -1567,18 +1567,67 @@ class _DrawingTranslator:
                     and original_atom.GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED
                 ):
                     target_atom.SetChiralTag(original_atom.GetChiralTag())
-                for bond in original_atom.GetBonds():
-                    begin_idx = bond.GetBeginAtomIdx()
-                    end_idx = bond.GetEndAtomIdx()
-                    target_bond = mol.GetBondBetweenAtoms(begin_idx, end_idx)
-                    if (
-                        target_bond
-                        and target_bond.GetStereo() == Chem.BondStereo.STEREONONE
-                        and bond.GetStereo() != Chem.BondStereo.STEREONONE
-                    ):
-                        target_bond.SetStereo(bond.GetStereo())
+            # Unsanitized SMILES carries / and \ as single-bond directions,
+            # not necessarily as double-bond stereo enums. Restore the complete
+            # relative representation before CoordGen, including reference atoms.
+            for bond in stereo_mol.GetBonds():
+                target_bond = mol.GetBondWithIdx(bond.GetIdx())
+                if bond.GetBondDir() != Chem.BondDir.NONE:
+                    target_bond.SetBondDir(bond.GetBondDir())
+            Chem.SetBondStereoFromDirections(mol)
+            # Normalize the decoder's CIS/TRANS enums for the coordinate
+            # constraint check, keeping its explicit reference atoms unchanged.
+            for bond in mol.GetBonds():
+                if bond.GetStereo() == Chem.BondStereo.STEREOCIS:
+                    bond.SetStereo(Chem.BondStereo.STEREOZ)
+                elif bond.GetStereo() == Chem.BondStereo.STEREOTRANS:
+                    bond.SetStereo(Chem.BondStereo.STEREOE)
         except Exception:
             pass
+
+    @staticmethod
+    def _mark_unspecified_double_bonds(
+        mol: Mol, descriptions: List[GroupDesc]
+    ) -> None:
+        """Perceive label-distinct ligands without changing the drawn graph.
+
+        Isotopes are private identity sentinels on a perception-only copy;
+        identical labels stay identical and no synthetic isotope is rendered.
+        """
+        probe = Chem.Mol(mol)
+        next_isotope = max((a.GetIsotope() for a in probe.GetAtoms()), default=0) + 1
+        identities: Dict[Tuple[str, int], int] = {}
+        for desc in descriptions:
+            if not isinstance(desc.id, AtomIndex) or desc.is_dummy:
+                continue
+            idx = int(desc.id)
+            if not 0 <= idx < probe.GetNumAtoms():
+                continue
+            atom = probe.GetAtomWithIdx(idx)
+            label = _format_group_label(desc)
+            if atom.GetAtomicNum() != 0 or not label:
+                continue
+            key = (label, atom.GetIsotope())
+            if key not in identities:
+                identities[key] = next_isotope
+                next_isotope += 1
+            atom.SetIsotope(identities[key])
+        for info in Chem.FindPotentialStereo(probe):
+            if info.type != Chem.StereoType.Bond_Double:
+                continue
+            bond = mol.GetBondWithIdx(info.centeredOn)
+            if bond.GetStereo() != Chem.BondStereo.STEREONONE:
+                continue
+            # Cumulenes have different stereochemical semantics, not E/Z on
+            # an isolated double bond. Do not cross their individual bonds.
+            if any(
+                sum(b.GetBondType() == Chem.BondType.DOUBLE for b in atom.GetBonds())
+                != 1
+                for atom in (bond.GetBeginAtom(), bond.GetEndAtom())
+            ):
+                continue
+            bond.SetStereo(Chem.BondStereo.STEREOANY)
+            bond.SetBondDir(Chem.BondDir.EITHERDOUBLE)
 
     @classmethod
     def parse_caption(
@@ -1739,7 +1788,10 @@ class _DrawingTranslator:
         else:
             raise TypeError(f"Invalid argument type: `{mol.__class__.__name__}`")
 
+        # Labels, coordinates and depiction flags are drawing-local.
+        mol = Chem.Mol(mol)
         grp_descriptions = cls.parse_groups(groups)
+        cls._mark_unspecified_double_bonds(mol, grp_descriptions)
         candidate_single_ch2_repeats = _single_ch2_repeat_records(
             mol,
             grp_descriptions,
@@ -1885,6 +1937,33 @@ class _DrawingTranslator:
         params = Chem.rdCoordGen.CoordGenParams()
         params.minimizerPrecision = params.sketcherBestPrecision
         Chem.rdCoordGen.AddCoords(mol, params)
+        # CoordGen can ignore relative stereo when several ligands are dummy
+        # atoms. Verify geometry against the input reference atoms, and use
+        # RDKit's depiction engine only when CoordGen violated a constraint.
+        conf = mol.GetConformer()
+        for bond in mol.GetBonds():
+            stereo = bond.GetStereo()
+            refs = list(bond.GetStereoAtoms())
+            if (
+                stereo not in (Chem.BondStereo.STEREOE, Chem.BondStereo.STEREOZ)
+                or len(refs) != 2
+            ):
+                continue
+            p, q, r, s = [
+                conf.GetAtomPosition(i)
+                for i in (
+                    bond.GetBeginAtomIdx(),
+                    bond.GetEndAtomIdx(),
+                    refs[0],
+                    refs[1],
+                )
+            ]
+            side_r = (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)
+            side_s = (q.x - p.x) * (s.y - q.y) - (q.y - p.y) * (s.x - q.x)
+            expected = -1 if stereo == Chem.BondStereo.STEREOE else 1
+            if side_r * side_s * expected <= 0:
+                Chem.rdDepictor.Compute2DCoords(mol, forceRDKit=True)
+                break
         Chem.rdDepictor.StraightenDepiction(mol, 0)
 
         dummy_info: List[Tuple[int, int]] = []
@@ -2794,5 +2873,5 @@ def draw(
     if svg_to_png is not None:
         if not isinstance(drawing, str):
             raise RuntimeError("SVG renderer returned non-text output")
-        return svg_to_png(bytestring=drawing.encode("utf-8"))
+        return svg_to_png(bytestring=drawing.encode("utf-8"), scale=1.5)
     return drawing
