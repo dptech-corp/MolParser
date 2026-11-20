@@ -492,7 +492,7 @@ def _sgroup_records(groups: str) -> List[Tuple[str, List[Tuple[int, int]], str]]
         ):
             continue
         count = repeat.group(1).strip()
-        if not re.fullmatch(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?", count):
+        if not re.fullmatch(Patterns.repeat_count, count):
             continue
         records.append((body, ports, count))
     return records
@@ -546,7 +546,6 @@ def _single_ch2_repeat_records(
             or any(
                 bond.GetBondType() != Chem.BondType.SINGLE
                 or bond.GetIsAromatic()
-                or bond.IsInRing()
                 for bond in bonds
             )
         ):
@@ -701,7 +700,7 @@ def _whole_sru_ports(mol: Mol, groups: str) -> Optional[List[Tuple[int, int]]]:
 
 def _sru_count(extension: str) -> Optional[str]:
     match = re.fullmatch(
-        r"\|Sg:([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)\|",
+        rf"\|Sg:({Patterns.repeat_count})\|",
         extension,
     )
     if match is None:
@@ -820,7 +819,7 @@ def _draw_sgroup_boundary_parentheses(
     show_count: bool = True,
     bracket_style: Literal["round", "square"] = "round",
 ) -> Optional[List[float]]:
-    """Draw an inward-opening bracket across each S-group boundary bond."""
+    """Draw boundary brackets, enclosing the entire arm for a pendant group."""
 
     conf = mol.GetConformer()
     draw_points: List[Point2D] = []
@@ -844,13 +843,49 @@ def _draw_sgroup_boundary_parentheses(
         layouts.append(
             [midpoint, inner_dir_x, inner_dir_y, perp_x, perp_y]
         )
+    half_height = 0.52
+    if len(layouts) == 1:
+        repeat_atoms = _sgroup_repeat_atoms(mol, ports)
+        if repeat_atoms:
+            midpoint, dx, dy, px, py = layouts[0]
+            positions = [conf.GetAtomPosition(i) for i in repeat_atoms]
+            # Prefer upright brackets when the arm lies on one side of the cut.
+            sign = 1.0 if dx >= 0 else -1.0
+            if min(sign * (p.x - midpoint.x) for p in positions) > 0.15:
+                dx, dy, px, py = sign, 0.0, 0.0, 1.0
+            # Place the near stroke in the visible bond gap. Condensed
+            # outer labels extend beyond their atom centres toward the arm.
+            near_atom = mol.GetAtomWithIdx(ports[0][1])
+            if near_atom.HasProp("_displayLabel") and near_atom.GetProp("_displayLabel"):
+                inner = conf.GetAtomPosition(ports[0][0])
+                midpoint = Point2D(midpoint.x + 0.34 * (inner.x - midpoint.x),
+                                   midpoint.y + 0.34 * (inner.y - midpoint.y))
+            offsets = [(p.x - midpoint.x, p.y - midpoint.y) for p in positions]
+            depths = [dx * x + dy * y for x, y in offsets]
+            heights = [px * x + py * y for x, y in offsets]
+            # Allow space for displayed atom labels, including subscripts.
+            unit = drawer.GetDrawCoords(Point2D(1.0, 0.0))
+            origin = drawer.GetDrawCoords(Point2D(0.0, 0.0))
+            em = font_size / max(1.0, math.hypot(unit.x-origin.x, unit.y-origin.y))
+            pads = []
+            for idx in repeat_atoms:
+                atom = mol.GetAtomWithIdx(idx)
+                label = atom.GetProp("_displayLabel") if atom.HasProp("_displayLabel") else atom.GetSymbol()
+                pads.append(max(0.4, em * 0.68 * len(re.sub("<[^>]+>", "", label))))
+            depth = max(v + pad for v, pad in zip(depths, pads)) + 0.2
+            low = min(v - pad for v, pad in zip(heights, pads))
+            high = max(v + pad for v, pad in zip(heights, pads))
+            shift = (low + high) / 2
+            half_height = max(0.52, (high - low) / 2 + 0.2)
+            near = Point2D(midpoint.x + shift * px, midpoint.y + shift * py)
+            far = Point2D(near.x + depth * dx, near.y + depth * dy)
+            layouts = [[near, dx, dy, px, py], [far, -dx, -dy, px, py]]
     snapped_axes = _snap_paired_bracket_axes(
         [(layout[3], layout[4]) for layout in layouts]
     )
     for layout, (perp_x, perp_y) in zip(layouts, snapped_axes):
         midpoint, inner_dir_x, inner_dir_y, _old_perp_x, _old_perp_y = layout
         if bracket_style == "square":
-            half_height = 0.52
             cap_length = 0.19
             upper = Point2D(
                 midpoint.x + perp_x * half_height,
@@ -879,7 +914,7 @@ def _draw_sgroup_boundary_parentheses(
                 perp_y,
                 inner_dir_x,
                 inner_dir_y,
-                0.52,
+                half_height,
             )
             curve_points = _draw_cubic_curve(
                 drawer,
@@ -980,7 +1015,7 @@ def _virtual_arc_substituents(groups: str) -> Dict[int, List[str]]:
             r"(?P<symbol>[^\[\?\'\"]+)"
             r"(?P<script>\[[^\]]+\])?"
             r"(?P<prime>[\'\"]?)"
-            r"(?P<multiple>\?(?:[a-z]|\d+|\d+-\d+)?)?$",
+            rf"(?P<multiple>\?{Patterns.repeat_count})?$",
             label,
         )
         if label_match:
@@ -1538,7 +1573,7 @@ class _DrawingPatterns:
         rf"(?P<{TextType.SYMBOL.value}>[^\[\?\'\"]*?)"
         + rf"(?P<{TextType.SCRIPT.value}>(\[\S+\])?)"
         + rf"(?P<{TextType.PRIME.value}>[\'\"]?)"
-        + rf"(?P<{TextType.MULTIPLE.value}>(\?([a-z]|\d+|\d+-\d+)$)?)"
+        + rf"(?P<{TextType.MULTIPLE.value}>(\?{Patterns.repeat_count}$)?)"
     )
     grp_pattern = re.compile(
         rf"({Tokens.atom_start}|{Tokens.circ_start}|{Tokens.dummy_start}|{Tokens.ring_start}|{Tokens.ring_start}{Tokens.circ_start}|{Tokens.ring_start}{Tokens.virtual_start})"
@@ -1745,10 +1780,10 @@ class _DrawingTranslator:
         else:
             symbol_part = content
 
-        multiple_match = re.search(r"\?([a-z]|\d+|\d+-\d+)$", symbol_part)
+        multiple_match = Patterns.repeat_suffix.search(symbol_part)
         if multiple_match:
             texts[TextType.MULTIPLE] = multiple_match.group(1)
-            symbol_part = re.sub(r"\?([a-z]|\d+|\d+-\d+)$", "", symbol_part)
+            symbol_part = symbol_part[:multiple_match.start()]
 
         prime_match = re.search(r"[\'\"]$", symbol_part)
         if prime_match:
@@ -1933,6 +1968,15 @@ class _DrawingTranslator:
             for atom_idx in whole_sru_endpoints:
                 mol.GetAtomWithIdx(atom_idx).SetProp("_displayLabel", "")
 
+        # Use the same carbon skeleton for coordinate generation and bond
+        # colouring as the equivalent two-boundary, single-atom S-group.
+        for atom_idx in single_ch2_indices:
+            atom = mol.GetAtomWithIdx(atom_idx)
+            atom.SetAtomicNum(6)
+            atom.SetNoImplicit(False)
+            if atom.HasProp("_displayLabel"):
+                atom.ClearProp("_displayLabel")
+            atom.UpdatePropertyCache()
         mol.RemoveAllConformers()
         params = Chem.rdCoordGen.CoordGenParams()
         params.minimizerPrecision = params.sketcherBestPrecision
@@ -1965,6 +2009,27 @@ class _DrawingTranslator:
                 Chem.rdDepictor.Compute2DCoords(mol, forceRDKit=True)
                 break
         Chem.rdDepictor.StraightenDepiction(mol, 0)
+
+        # Reserve a visible boundary bond beside a long condensed-core label.
+        # Translate the entire arm rigidly to preserve its internal depiction.
+        if repeat_units:
+            conf = mol.GetConformer()
+            for _, ports, _ in candidate_sgroup_records:
+                if len(ports) != 1:
+                    continue
+                arm = _sgroup_repeat_atoms(mol, ports)
+                if not arm:
+                    continue
+                inner, outer = ports[0]
+                atom = mol.GetAtomWithIdx(outer)
+                label = atom.GetProp("_displayLabel") if atom.HasProp("_displayLabel") else ""
+                width = len(re.sub("<[^>]+>", "", label))
+                if width < 3:
+                    continue
+                offset = conf.GetAtomPosition(inner) - conf.GetAtomPosition(outer)
+                offset *= min(1.5, width * 0.15)
+                for index in arm:
+                    conf.SetAtomPosition(index, conf.GetAtomPosition(index) + offset)
 
         dummy_info: List[Tuple[int, int]] = []
         if drawing_config.features.dummy_atoms:
@@ -2550,8 +2615,8 @@ class _DrawingTranslator:
                 drawing_config.visual.bondLineWidth,
                 float(drawing_config.visual.fixedFontSize),
                 ring_bounds,
-                True,
-                "round",
+                count != "n" or drawing_config.styling.show_default_sru_count,
+                drawing_config.styling.sgroup_bracket_style,
             )
 
         if whole_sru_count is not None and whole_sru_ports is not None:
@@ -2784,12 +2849,12 @@ class _DrawingTranslator:
         svg_text = drawer.GetDrawingText()
         if axial_anchors:
             svg_text = _italicize_axial_labels(svg_text, axial_anchors)
+        if ring_bounds is not None:
+            svg_text = _expand_svg_viewbox(svg_text, ring_bounds, pad=6.0)
         if write_to is not None:
             Path(write_to).parent.mkdir(parents=True, exist_ok=True)
             Path(write_to).write_text(svg_text)
             return
-        if ring_bounds is not None:
-            svg_text = _expand_svg_viewbox(svg_text, ring_bounds, pad=6.0)
         return svg_text
 
 
@@ -2799,7 +2864,7 @@ def _needs_svg_overlay(smi: str, config: DrawingConfig) -> bool:
     repeat_syntax = bool(
         "<g>" in smi
         or "|Sg:" in smi
-        or re.search(r"<a>\d+:CH2\?(?:[a-z]|\d+|\d+-\d+)</a>", smi)
+        or re.search(rf"<a>\d+:CH2\?{Patterns.repeat_count}</a>", smi)
     )
     repeat_setting = config.features.repeat_units
     repeat_overlay = repeat_setting is True or (

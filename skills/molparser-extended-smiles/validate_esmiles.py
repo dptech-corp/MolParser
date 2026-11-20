@@ -54,8 +54,9 @@ AXIAL_RE = re.compile(
 )
 PORT_RE = re.compile(r"\[(?P<inner>\d+):(?P<outer>\d+)\]")
 PORT_PREFIX_RE = re.compile(r"^(?:\[\d+:\d+\]:)+$")
-SG_COUNT_RE = re.compile(r"^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?$")
-REPEAT_SUFFIX_RE = re.compile(r"\?(?:[a-z]|\d+|\d+-\d+)$")
+REPEAT_COUNT = r"(?:\d+(?:\.\d+)?(?:/\d+)?|[A-Za-z0-9_]+['′]*)(?:-(?:\d+(?:\.\d+)?(?:/\d+)?|[A-Za-z0-9_]+['′]*))?"
+SG_COUNT_RE = re.compile(rf"^{REPEAT_COUNT}$")
+REPEAT_SUFFIX_RE = re.compile(rf"\?{REPEAT_COUNT}$")
 SPECIAL_ID_RE = re.compile(r"^<id>\[[^\]]+\]$")
 
 
@@ -196,7 +197,7 @@ def _validate_record(
                 add(
                     messages,
                     "warning",
-                    f"<{tag}> repeat suffix may not be parsed by current molparser.utils; use ?n / ?1-3 / ?3 / ?10: {suffix!r}",
+                    f"<{tag}> repeat suffix may not be parsed by current molparser.utils; check the printed count: {suffix!r}",
                 )
     return record_info
 
@@ -205,6 +206,9 @@ def _validate_sgroup_count(count: str, messages: list[Message], context: str) ->
     clean = count.strip()
     if not clean:
         add(messages, "error", f"{context} count is empty")
+    elif re.fullmatch(r"\d+\.\d+", clean):
+        if not any(ch in "123456789" for ch in clean):
+            add(messages, "error", f"{context} count must be positive")
     elif not SG_COUNT_RE.match(clean):
         add(messages, "warning", f"{context} count is syntactically unusual: {clean!r}")
     elif clean.isdigit() and int(clean) < 1:

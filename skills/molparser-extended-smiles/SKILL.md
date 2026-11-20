@@ -1,6 +1,6 @@
 ---
 name: molparser-extended-smiles
-description: "Use for MolParser E-SMILES generation, validation, normalization, abbreviation substitution, Markush definition substitution, rendering, and repair in OCSR/Markush workflows, including atom-indexed substituents, regio-uncertain ring attachments, abstract-ring superatoms, dummy attachment points, local substructure multiplicity suffixes, virtual arcs, axial chirality (stereogenic axis), SRU repeat markers, and MolParser colored endpoint-ball labels."
+description: "Use for MolParser E-SMILES generation, validation, normalization, abbreviation substitution, Markush definition substitution, rendering, and repair in OCSR/Markush workflows, including atom-indexed substituents, regio-uncertain ring attachments, abstract-ring superatoms, dummy attachment points, site or attachment-group multiplicity suffixes, virtual arcs, axial chirality (stereogenic axis), SRU repeat markers, and MolParser colored endpoint-ball labels."
 ---
 
 # MolParser E-SMILES Skill
@@ -22,7 +22,7 @@ Use this skill when reading, writing, validating, normalizing, or rendering MolP
    - `<x>[ATOM_1:ATOM_2]:[STATE]</x>`: stereogenic-axis chirality. `ATOM_1` and `ATOM_2` are the terminal reference points of the chiral axis (`ATOM_1 < ATOM_2`); `STATE` is `Ra` or `Sa`.
    - `<s>[SUBSTRUCTURE_ESMILES]</s>`: repository compatibility extension for nested substructure records.
    - `<g>[INNER_PORT:OUTER_PORT]:...:|Sg:n|</g>`: E-SMILES 2.0 local s-group repeat record.
-   - `?n`, `?1-3`, `?3`: local substructure multiplicity suffix on a group label.
+   - `?n`, `?1-3`, `?3`: multiplicity suffix on one site or attachment-group label.
    - `|Sg:n|`: structural repeating unit (SRU) repeat marker.
 4. Keep indexes zero-based. Atom indexes and ring indexes are separate namespaces.
 5. Return the E-SMILES first; add only concise notes for unsupported chemistry or ambiguity.
@@ -83,8 +83,7 @@ result = mutils.substitute_markush(
   returns `"Cc1ccccc1"` after symmetry de-duplication, while
   `<r>0:R[1]?1-3</r>` returns a list for 1-3 methyl substitutions on benzene.
   `<r>0,1:R[1]</r>` uses the union of rings 0 and 1 as that same site set.
-- Multiplicity suffixes `?3`, `?1-3`, and `?n` encode local substructure
-  replication; `?n` reads the replication count from the definition
+- Multiplicity suffixes `?3`, `?1-3`, and `?n` encode the multiplicity of one site or attachment group; `?n` reads the replication count from the definition
   dictionary, e.g. `<a>2:CH2?n</a>` with `{"n": 10}`.
 - Treat `<id>[NOTE]` as a preserved special label, not as a definition key.
   `substitute_markush` may resolve other labels in the same branch while keeping
@@ -95,11 +94,14 @@ result = mutils.substitute_markush(
   `<s>ClBr<sep>|Sg:n|</s>`. An `<s>` nested inside another `<s>` is rejected.
   This does not change the existing `?n` copy behavior.
 - With the default `repeat_policy="best_effort"`, physically expand Whole-SRU
-  and two-port `<g>` repeats only when their boundary bonds and scope are
+  and one- or two-port `<g>` repeats only when their boundary bonds and scope are
   unambiguous. Preserve under-specified `<s>`, `<g>`, `<v>`, and `<r><v>...`
   portions as E-SMILES, while substituting independent resolvable labels and
   remapping retained outer-graph indices. Use `strict` to reject residual
   repeats and `preserve` for annotation-only repeat handling.
+- A single boundary `[inner:outer]` repeats the entire connected arm on the inner side of the cut. All copies attach to the same outer core. For example, `NCC<sep><g>[1:0]:|Sg:3|</g>` resolves to triethylamine. Copied atom labels follow their own arm. A condensed core such as `N3P3` retains its annotation because its attachment topology is unspecified.
+- Always use `?COUNT` when one atom-indexed owner or attachment-group label can express the printed multiplicity. Use local `<g>…|Sg:COUNT|</g>` only when those labels cannot express the repeated fragment and its connections.
+- Retain the printed count literally for site, fragment and whole-unit repeats, including decimals, fractions and symbolic ranges such as `7.6`, `1/3` and `m-n`. These counts can be displayed without expanding them into an integer number of copies.
 - For the PEG-like example
   `*OCCO*<sep><d>0:<dum></d><d>5:<dum></d><g>[1:0]:[3:4]:|Sg:12|</g>`, pass
   `terminal_policy="hydrogen"`; the result is `"O" + "CCO" * 12` (C24H50O13),
@@ -147,7 +149,7 @@ Markush expansion.
 - A virtualArc name may be empty. The repository's normalization convention is to emit endpoint pairs with `start < end`, sort multiple pairs lexicographically, assign consecutive ids, and rebind `<r><v>` references; continue accepting reversed endpoints when reading. This convention is separate from the E-SMILES 2.0 requirement that `<x>` axis indexes be ascending.
 - `<g>` port pairs use `[INNER_PORT:OUTER_PORT]`; repeat count defaults to `n` and may be explicit, e.g. `|Sg:20|`.
 - `GROUP_LABEL` may be a common abbreviation (`Me`, `OMe`, `CF3`) or a Markush label (`R[1]`). Use `<id>[NOTE]` only as an atom-indexed `<a>` payload, with a non-empty, whitespace-free `NOTE` that contains no `]` and has no multiplicity suffix. Endpoint-ball rendering on `*` is only a visual treatment of approved `<id>` values; it is not a separate token or chemical identity. For dummy attachment points, prefer `<d>[ATOM_INDEX]:<dum></d>` and accept legacy `<a>[ATOM_INDEX]:<dum></a>`.
-- Use local substructure multiplicity suffixes (`?n`, `?1-3`, `?3`) separately from SRU-level `|Sg:n|`.
+- Use site or attachment-group multiplicity suffixes (`?n`, `?1-3`, `?3`) separately from SRU-level `|Sg:n|`.
 - After canonicalization or abbreviation substitution, remap supported retained `<g>`, `<v>`, `<x>`, and atom/ring annotations. If a resolved substitution removes an endpoint needed by a retained annotation, best-effort mode rolls that branch back instead of emitting a silently corrupted record.
 
 ## Boundary Policy
