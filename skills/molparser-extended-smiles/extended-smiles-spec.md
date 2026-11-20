@@ -144,7 +144,7 @@ Nc1ccc2ccccc2c1-c1c(O)ccc2ccccc12<sep><x>[10:11]:Sa</x>
 
 ## 3. Multiplicity And Structural Repetition
 
-Use a suffix on a group label for local substructure multiplicity:
+Use a suffix on a group label for the multiplicity of one site or attachment group:
 
 ```text
 <r>1:R[1]?1-3</r>
@@ -179,7 +179,10 @@ s-group repeat record. It does not itself set the whole-molecule `sru` flag.
 - `OUTER_PORT`: atom index outside the repeat structure.
 - Multiple port pairs are written by repeating `[INNER_PORT:OUTER_PORT]` and separating fields with `:`.
 - The repeat count defaults to `n` when abstract; explicit numbers, letters, and ranges such as `20`, `m`, or `m-n` are syntactically accepted.
-- `substitute_markush` defaults to best-effort repeat handling. It physically expands a concrete Whole-SRU or two-port `<g>` repeat only when the boundary bonds, cut set, and scope are unambiguous; a fully resolved result is RDKit-parseable SMILES. Otherwise it preserves the unresolved record as E-SMILES and still substitutes independent resolvable labels. Use `repeat_policy="strict"` to reject such residuals or `"preserve"` for annotation-only repeat handling.
+- `substitute_markush` defaults to best-effort repeat handling. It physically expands a concrete Whole-SRU or one- or two-port `<g>` repeat only when the boundary bonds, cut set, and scope are unambiguous; a fully resolved result is RDKit-parseable SMILES. Otherwise it preserves the unresolved record as E-SMILES and still substitutes independent resolvable labels. Use `repeat_policy="strict"` to reject such residuals or `"preserve"` for annotation-only repeat handling.
+- A single boundary `[inner:outer]` repeats the entire connected arm on the inner side of the cut. All copies attach to the same outer core. For example, `NCC<sep><g>[1:0]:|Sg:3|</g>` resolves to triethylamine. Copied atom labels follow their own arm. A condensed core such as `N3P3` retains its annotation because its attachment topology is unspecified.
+- Always use `?COUNT` when one atom-indexed owner or attachment-group label can express the printed multiplicity. Use local `<g>…|Sg:COUNT|</g>` only when those labels cannot express the repeated fragment and its connections.
+- Retain the printed count literally for site, fragment and whole-unit repeats, including decimals, fractions and symbolic ranges such as `7.6`, `1/3` and `m-n`. These counts can be displayed without expanding them into an integer number of copies.
 - Round parentheses and square brackets are equivalent drawing styles for the same `<g>` record; bracket shape is not encoded in E-SMILES.
 
 ```text
@@ -272,7 +275,7 @@ Preserve the encodable backbone, do not invent tokens, and report unencoded chem
   whitespace-free `NOTE` that contains no `]` and has no `?` multiplicity
   suffix; endpoint-ball values use the same syntax as text labels and render as
   balls only when the indexed base atom is `*` and ball rendering is enabled;
-- local substructure multiplicity uses `?n`, `?1-3`, or `?3`;
+- site or attachment-group multiplicity uses a literal `?COUNT`, e.g. `?n`, `?1-3`, `?7.6` or `?1/3`;
 - SRU repetition uses `|Sg:n|` or an explicit count such as `|Sg:20|`;
 - supported retained `<g>`, `<v>`, and atom/ring indexes are remapped after canonicalization or substitution; if an endpoint is removed and cannot be remapped, best-effort mode preserves the original branch instead of silently changing the annotated scope.
 - an unnamed virtualArc uses an empty name field, `<v>0::[START:END]</v>`;

@@ -1009,6 +1009,114 @@ def _expand_whole_sru_state(
     return editable
 
 
+def _expand_pendant_group(
+    mol: Chem.rdchem.Mol,
+    groups: str,
+    definitions: Mapping[str, DefinitionValue],
+    max_outputs: int,
+) -> tuple[Chem.rdchem.Mol, str]:
+    """Expand a one-port arm before substitution so each copy owns its labels."""
+    matches = _top_level_local_sgroup_matches(groups)
+    if len(matches) != 1:
+        return mol, groups
+    match = matches[0]
+    boundary = re.fullmatch(r"\[(\d+):(\d+)\]:\|Sg:([^|]+)\|", match["body"])
+    if boundary is None:
+        return mol, groups
+    inner, outer = map(int, boundary.groups()[:2])
+    count = _concrete_sgroup_count(boundary[3], definitions)
+    if count is None or max(inner, outer) >= mol.GetNumAtoms():
+        return mol, groups
+    if count > max_outputs:
+        raise ValueError(f"Markush expansion exceeded max_outputs={max_outputs}")
+    bond = mol.GetBondBetweenAtoms(inner, outer)
+    if bond is None or bond.GetBondType() != Chem.BondType.SINGLE or bond.IsInRing():
+        return mol, groups
+    arm = _component_without_edges(mol, inner, {frozenset((inner, outer))})
+    remaining = groups[:match.start()] + groups[match.end():]
+    # Only atom-owned annotations have a copy rule here. Keep composite,
+    # ring-indexed and cross-boundary records together with their original arm.
+    records = list(_PRESERVED_ATOM_RECORD_PATTERN.finditer(remaining))
+    if _PRESERVED_ATOM_RECORD_PATTERN.sub("", remaining).strip():
+        return mol, groups
+    owners = [int(r["index"]) for r in records]
+    if len(set(owners)) != len(owners) or any(i >= mol.GetNumAtoms() for i in owners):
+        return mol, groups
+    editable = Chem.RWMol(mol)
+    core = editable.GetAtomWithIdx(outer)
+    core_record = next((r for r in records if int(r["index"]) == outer), None)
+    if core_record is not None:
+        # Only a literal element has a known single attachment centre.
+        symbol = core_record["value"]
+        if (core.GetAtomicNum() != 0 or core_record["tag"] != "a"
+                or not re.fullmatch(r"[A-Z][a-z]?", symbol)
+                or symbol in _definition_lookup(definitions)):
+            return mol, groups
+        replacement = Chem.MolFromSmiles(symbol)
+        if replacement is None or replacement.GetNumAtoms() != 1:
+            return mol, groups
+        editable.ReplaceAtom(outer, replacement.GetAtomWithIdx(0))
+        core = editable.GetAtomWithIdx(outer)
+        records.remove(core_record)
+    if core.GetAtomicNum() == 0:
+        return mol, groups
+    if (core.GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED
+            or mol.GetAtomWithIdx(inner).GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED
+            or bond.GetBondDir() != Chem.BondDir.NONE):
+        return mol, groups
+    for desc in Translator.parse_groups(remaining):
+        if int(desc.id) in arm and len(_resolve_group_smiles(desc, definitions)) > 1:
+            # Keep a shared choice for all arms instead of enumerating mixed arms.
+            return mol, groups
+    editable.UpdatePropertyCache(strict=False)
+    if core.GetNumImplicitHs() < count - 1:
+        return mol, groups
+    annotations = [r.group() for r in records]
+    for _ in range(count - 1):
+        copied = _copy_atom_subset(editable, mol, arm)
+        if copied is None:
+            return mol, groups
+        editable.AddBond(outer, copied[inner], bond.GetBondType())
+        for r in records:
+            owner = int(r["index"])
+            if owner in copied:
+                tag = r["tag"]
+                annotations.append(f"<{tag}>{copied[owner]}:{r['value']}</{tag}>")
+    if Chem.SanitizeMol(editable, catchErrors=True) != Chem.SanitizeFlags.SANITIZE_NONE:
+        return mol, groups
+    return editable, "".join(annotations)
+
+
+def _restore_compact_bond_directions(mol: Chem.Mol, smiles: str) -> bool:
+    """Recover directional bonds suppressed by equal ligands in the compact unit."""
+    if "/" not in smiles and "\\" not in smiles:
+        return False
+    raw = chem_utils.parse_smiles(smiles, sanitize=False)
+    if raw is None or raw.GetNumBonds() != mol.GetNumBonds():
+        return False
+    restored = False
+    for source in raw.GetBonds():
+        direction = source.GetBondDir()
+        if direction not in (Chem.BondDir.ENDUPRIGHT, Chem.BondDir.ENDDOWNRIGHT):
+            continue
+        bond = mol.GetBondBetweenAtoms(source.GetBeginAtomIdx(), source.GetEndAtomIdx())
+        if bond is not None and bond.GetBondDir() == Chem.BondDir.NONE:
+            bond.SetBondDir(direction)
+            restored = True
+    return restored
+
+
+def _port_direction(bond: Chem.Bond, start: int) -> Chem.BondDir:
+    direction = bond.GetBondDir()
+    if start == bond.GetBeginAtomIdx():
+        return direction
+    if direction == Chem.BondDir.ENDUPRIGHT:
+        return Chem.BondDir.ENDDOWNRIGHT
+    if direction == Chem.BondDir.ENDDOWNRIGHT:
+        return Chem.BondDir.ENDUPRIGHT
+    return direction
+
+
 def _expand_local_sgroup_state(
     state: Chem.rdchem.RWMol,
     ports: tuple[tuple[int, int], tuple[int, int]],
@@ -1025,7 +1133,9 @@ def _expand_local_sgroup_state(
             return None
         resolved_ports.append((inner, outer))
     (left_inner, left_outer), (right_inner, right_outer) = resolved_ports
-    if len({left_inner, left_outer, right_inner, right_outer}) != 4:
+    if left_outer == right_outer or {left_inner, right_inner} & {left_outer, right_outer}:
+        return None
+    if left_inner == right_inner and source.GetAtomWithIdx(left_inner).GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED:
         return None
     left_bond = source.GetBondBetweenAtoms(left_inner, left_outer)
     right_bond = source.GetBondBetweenAtoms(right_inner, right_outer)
@@ -1062,6 +1172,12 @@ def _expand_local_sgroup_state(
     ):
         return None
 
+    left_direction = _port_direction(left_bond, left_outer)
+    right_direction = _port_direction(right_bond, right_inner)
+    directed = {left_direction, right_direction} - {Chem.BondDir.NONE}
+    if count > 1 and len(directed) > 1:
+        return None
+    join_direction = next(iter(directed), Chem.BondDir.NONE)
     editable = Chem.RWMol(source)
     editable.RemoveBond(right_inner, right_outer)
     current_right = right_inner
@@ -1070,8 +1186,10 @@ def _expand_local_sgroup_state(
         if copied is None:
             return None
         editable.AddBond(current_right, copied[left_inner], left_bond.GetBondType())
+        editable.GetBondBetweenAtoms(current_right, copied[left_inner]).SetBondDir(join_direction)
         current_right = copied[right_inner]
     editable.AddBond(current_right, right_outer, right_bond.GetBondType())
+    editable.GetBondBetweenAtoms(current_right, right_outer).SetBondDir(right_direction)
 
     if terminal_policy == "hydrogen" and terminal_indices is not None:
         if not _convert_terminal_dummies_to_hydrogen(editable, terminal_indices):
@@ -1595,10 +1713,16 @@ def _substitute_markush_outputs(
     mol, groups, ext = parsed
     ext = _substitute_sgroup_counts(ext, definitions)
     groups = Translator.repair_atom_group_indices(mol, groups, error_msg=error_msg)
+    if allow_physical_repeats and repeat_policy != "preserve" and not ext and terminal_policy == "preserve":
+        mol, groups = _expand_pendant_group(mol, groups, definitions, max_outputs)
     source_rings = mol.GetRingInfo().AtomRings()
     for atom in mol.GetAtoms():
         atom.SetAtomMapNum(atom.GetIdx() + 1)
 
+    local_repeats = _top_level_local_sgroup_matches(groups)
+    restored_directions = bool(local_repeats) and _restore_compact_bond_directions(
+        mol, raw_caption.split(Tokens.separator, 1)[0]
+    )
     states = [Chem.RWMol(mol)]
     unresolved_group_records: list[str] = []
     for desc in Translator.parse_groups(groups):
@@ -1741,6 +1865,12 @@ def _substitute_markush_outputs(
             max_outputs=max_outputs,
             has_unresolved_groups=bool(unresolved_group_records),
         )
+    if restored_directions:
+        if _top_level_local_sgroup_matches(groups):
+            # A canonical compact graph would erase the latent configuration.
+            return [_substitute_sgroup_counts(raw_caption, definitions)]
+        for state in states:
+            Chem.SetBondStereoFromDirections(state)
     annotation_variants = _substitute_precompat_records(
         groups,
         definitions,

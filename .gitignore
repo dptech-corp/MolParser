@@ -22,4 +22,4 @@ wheels/
 output*/
 TODO
 
-tests/
+tests/*

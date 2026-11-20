@@ -156,11 +156,13 @@ class Patterns:
     long_char_elements_pattern = re.compile(
         rf'{"|".join(LONG_CHAR_ELEMENTS) + "|."}'
     )
+    repeat_count = r"(?:\d+(?:\.\d+)?(?:/\d+)?|[A-Za-z0-9_]+['′]*)(?:-(?:\d+(?:\.\d+)?(?:/\d+)?|[A-Za-z0-9_]+['′]*))?"
+    repeat_suffix = re.compile(rf"\?({repeat_count})$")
     grp_content = re.compile(
         rf"(?P<{TextType.SYMBOL.value}>(?:{Tokens.special_id}|[A-Za-z0-9-\(\)]*))"
         + rf"(?P<{TextType.SCRIPT.value}>(\[\S+\])?)"
         + rf"(?P<{TextType.PRIME.value}>[\'\"]?)"
-        + rf"(?P<{TextType.MULTIPLE.value}>(\?([a-z]|\d+|\d+-\d+)$)?)"
+        + rf"(?P<{TextType.MULTIPLE.value}>(\?{repeat_count}$)?)"
     )
     grp_pattern = re.compile(
         rf"({Tokens.atom_start}|{Tokens.circ_start}|{Tokens.dummy_start}|{Tokens.ring_start}|{Tokens.ring_start}{Tokens.circ_start}|{Tokens.ring_start}{Tokens.virtual_start})"
@@ -292,10 +294,10 @@ class Translator:
         trailing = caption.split(Tokens.separator, 1)[1]
         _, ext = cls.parse_trailing(trailing)
         matched = re.fullmatch(
-            r"Sg:([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)", cls.parse_extension(ext)
+            rf"Sg:({Patterns.repeat_count})", cls.parse_extension(ext)
         )
         return bool(
-            matched and re.fullmatch(r"\d+(?:-\d+)?", matched.group(1)) is None
+            matched and re.search(r"[A-Za-z]", matched.group(1))
         )
 
     @classmethod
