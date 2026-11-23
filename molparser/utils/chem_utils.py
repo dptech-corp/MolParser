@@ -217,6 +217,22 @@ def get_groups_str(
     return groups_str
 
 
+def compact_smiles_order(state: Chem.Mol) -> tuple[str, list[int]]:
+    """Serialize residual repeat stereo component by component, retaining the index map."""
+    output = Chem.Mol(state)
+    for atom in output.GetAtoms():
+        atom.SetAtomMapNum(0)
+    Chem.SanitizeMol(output)
+    # Equal ligands may only become distinct when the residual repeat is expanded.
+    Chem.AssignStereochemistry(output, cleanIt=False, force=True)
+    fragments = []
+    atom_order = []
+    for atoms in Chem.GetMolFrags(output):
+        fragments.append(Chem.MolFragmentToSmiles(output, atomsToUse=atoms, canonical=False))
+        atom_order.extend(ast.literal_eval(output.GetProp("_smilesAtomOutputOrder")))
+    return ".".join(fragments), atom_order
+
+
 def _canonical_output_order(mol: Chem.rdchem.Mol) -> Tuple[Dict[int, int], Chem.rdchem.Mol | None]:
     output_mol = Chem.Mol(mol)
     for atom in output_mol.GetAtoms():
@@ -291,12 +307,23 @@ def merge_group(tgt_mol: Chem.rdchem.RWMol, src: str, attach_idx: int) -> None:
         tgt_mol.AddBond(j, k, bond.GetBondType())
 
 
-def remap_groups(mol: Chem.rdchem.Mol, groups: str, ring_info: tuple) -> str:
+def remap_groups(
+    mol: Chem.rdchem.Mol,
+    groups: str,
+    ring_info: tuple,
+    *,
+    output_order: tuple[str, list[int]] | None = None,
+) -> str:
     old_ind2agroup, old_ind2rgroup = split_groups(groups)
     new_ind2agroup: Dict[int, Dict] = {}
     internal_ind_map: Dict[int, int] = {}
     old_to_output: Dict[int, int] = {}
-    internal_to_output, output_mol = _canonical_output_order(mol)
+    if output_order is None:
+        internal_to_output, output_mol = _canonical_output_order(mol)
+    else:
+        smiles, atom_order = output_order
+        internal_to_output = {internal_idx: output_idx for output_idx, internal_idx in enumerate(atom_order)}
+        output_mol = parse_smiles(smiles)
 
     for atom in mol.GetAtoms():
         s = atom.GetSmarts()
