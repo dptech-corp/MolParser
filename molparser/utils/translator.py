@@ -156,7 +156,9 @@ class Patterns:
     long_char_elements_pattern = re.compile(
         rf'{"|".join(LONG_CHAR_ELEMENTS) + "|."}'
     )
-    repeat_count = r"(?:\d+(?:\.\d+)?(?:/\d+)?|[A-Za-z0-9_]+['′]*)(?:-(?:\d+(?:\.\d+)?(?:/\d+)?|[A-Za-z0-9_]+['′]*))?"
+    repeat_symbol = r"[0-9_]*[A-Za-z][A-Za-z0-9_]*['′]*"
+    _repeat_term = rf"(?:\d+(?:\.\d+|/\d+)?|{repeat_symbol})"
+    repeat_count = rf"{_repeat_term}(?:-{_repeat_term})?"
     repeat_suffix = re.compile(rf"\?({repeat_count})$")
     grp_content = re.compile(
         rf"(?P<{TextType.SYMBOL.value}>(?:{Tokens.special_id}|[A-Za-z0-9-\(\)]*))"
@@ -365,7 +367,10 @@ class Translator:
     @classmethod
     def get_group_texts(cls, content: str) -> Dict[TextType, str]:
         texts: Dict[TextType, str] = {}
-        matched = re.match(Patterns.grp_content, content).groupdict()
+        match = Patterns.grp_content.match(content)
+        if "?" in content[match.end():]:
+            return {TextType.SYMBOL: content}
+        matched = match.groupdict()
         for tt_value, text in matched.items():
             if len(text) == 0:
                 continue
@@ -674,13 +679,21 @@ class Translator:
             for atom in mol.GetAtoms():
                 atom.SetAtomMapNum(atom.GetIdx() + 1)
             ring_info = mol.GetRingInfo().AtomRings()
-            mapped_smiles = Chem.MolToSmiles(mol, canonical=False, isomericSmiles=True)
-            mapped_caption = cls.build_esmi(mapped_smiles, groups, ext)
+            preserve_stereo = False
+            if Tokens.sgroup_start in groups and any(marker in smi for marker in ("@", "/", "\\")):
+                try:
+                    from . import markush
+                except ImportError:
+                    import markush
+                preserve_stereo = bool(markush._top_level_local_sgroup_matches(groups)) and markush._restore_compact_stereo(mol, smi)
+            if not preserve_stereo:
+                mapped_smiles = Chem.MolToSmiles(mol, canonical=False, isomericSmiles=True)
+                mapped_caption = cls.build_esmi(mapped_smiles, groups, ext)
 
-            parsed = cls.parse_caption(
-                mapped_caption, return_mol=True, error_msg=error_msg
-            )
-            mol, groups, ext = parsed
+                parsed = cls.parse_caption(
+                    mapped_caption, return_mol=True, error_msg=error_msg
+                )
+                mol, groups, ext = parsed
             mol = Chem.RWMol(mol)
 
             mapnum2idx: Dict[int, int] = {}
@@ -840,7 +853,7 @@ class Translator:
 
             try:
                 Chem.SanitizeMol(mol)
-                if cleared_temporary_isotopes:
+                if cleared_temporary_isotopes and not preserve_stereo:
                     Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
             except Exception as e:
                 if error_msg:
@@ -854,19 +867,27 @@ class Translator:
                     sru=is_sru,
                 )
 
-            mol = chem_utils.parse_smiles(
-                Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
-            )
-
-            if is_markush or preserve_dummy_groups or preserve_precompat_groups:
-                remaining_groups = cls.remove_atom_groups(groups, consumed_atom_groups)
-                new_groups = chem_utils.remap_groups(mol, remaining_groups, ring_info)
+            if preserve_stereo:
+                if consumed_atom_groups:
+                    new_smi, order = chem_utils.compact_smiles_order(mol)
+                    remaining = cls.remove_atom_groups(groups, consumed_atom_groups)
+                    new_groups = chem_utils.remap_groups(mol, remaining, ring_info, output_order=(new_smi, order))
+                else:
+                    new_smi, new_groups = smi, groups
             else:
-                new_groups = ""
-                for atom in mol.GetAtoms():
-                    atom.SetAtomMapNum(0)
+                mol = chem_utils.parse_smiles(
+                    Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
+                )
 
-            new_smi = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
+                if is_markush or preserve_dummy_groups or preserve_precompat_groups:
+                    remaining_groups = cls.remove_atom_groups(groups, consumed_atom_groups)
+                    new_groups = chem_utils.remap_groups(mol, remaining_groups, ring_info)
+                else:
+                    new_groups = ""
+                    for atom in mol.GetAtoms():
+                        atom.SetAtomMapNum(0)
+
+                new_smi = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
             new_esmi = cls.build_esmi(new_smi, new_groups, ext)
 
             return TranslatedMolecule(

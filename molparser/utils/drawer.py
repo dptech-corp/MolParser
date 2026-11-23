@@ -844,46 +844,58 @@ def _draw_sgroup_boundary_parentheses(
             [midpoint, inner_dir_x, inner_dir_y, perp_x, perp_y]
         )
     half_height = 0.52
-    if len(layouts) == 1:
+    if len(ports) == 1 and len(layouts) == 1:
         repeat_atoms = _sgroup_repeat_atoms(mol, ports)
         if repeat_atoms:
             midpoint, dx, dy, px, py = layouts[0]
             positions = [conf.GetAtomPosition(i) for i in repeat_atoms]
-            # Prefer upright brackets when the arm lies on one side of the cut.
-            sign = 1.0 if dx >= 0 else -1.0
-            if min(sign * (p.x - midpoint.x) for p in positions) > 0.15:
-                dx, dy, px, py = sign, 0.0, 0.0, 1.0
             # Place the near stroke in the visible bond gap. Condensed
             # outer labels extend beyond their atom centres toward the arm.
             near_atom = mol.GetAtomWithIdx(ports[0][1])
             if near_atom.HasProp("_displayLabel") and near_atom.GetProp("_displayLabel"):
                 inner = conf.GetAtomPosition(ports[0][0])
-                midpoint = Point2D(midpoint.x + 0.34 * (inner.x - midpoint.x),
-                                   midpoint.y + 0.34 * (inner.y - midpoint.y))
+                midpoint = Point2D(
+                    midpoint.x + 0.34 * (inner.x - midpoint.x),
+                    midpoint.y + 0.34 * (inner.y - midpoint.y),
+                )
+            # Prefer upright brackets when the arm lies on one side of the shifted cut.
+            sign = 1.0 if dx >= 0 else -1.0
+            if min(sign * (p.x - midpoint.x) for p in positions) > 0.15:
+                dx, dy, px, py = sign, 0.0, 0.0, 1.0
             offsets = [(p.x - midpoint.x, p.y - midpoint.y) for p in positions]
             depths = [dx * x + dy * y for x, y in offsets]
             heights = [px * x + py * y for x, y in offsets]
             # Allow space for displayed atom labels, including subscripts.
             unit = drawer.GetDrawCoords(Point2D(1.0, 0.0))
             origin = drawer.GetDrawCoords(Point2D(0.0, 0.0))
-            em = font_size / max(1.0, math.hypot(unit.x-origin.x, unit.y-origin.y))
-            pads = []
+            em = font_size / max(1.0, math.hypot(unit.x - origin.x, unit.y - origin.y))
+            line_pad = max(0.4, em * 0.68)
+            widths = []
             for idx in repeat_atoms:
                 atom = mol.GetAtomWithIdx(idx)
                 label = atom.GetProp("_displayLabel") if atom.HasProp("_displayLabel") else atom.GetSymbol()
-                pads.append(max(0.4, em * 0.68 * len(re.sub("<[^>]+>", "", label))))
-            depth = max(v + pad for v, pad in zip(depths, pads)) + 0.2
-            low = min(v - pad for v, pad in zip(heights, pads))
-            high = max(v + pad for v, pad in zip(heights, pads))
+                widths.append(max(0.4, em * 0.68 * len(re.sub("<[^>]+>", "", label))))
+            depth_pads = [abs(dx) * width + abs(dy) * line_pad for width in widths]
+            height_pads = [abs(px) * width + abs(py) * line_pad for width in widths]
+            near_depth = min(0.0, min(depths) - 0.15)
+            far_depth = max(value + pad for value, pad in zip(depths, depth_pads)) + 0.2
+            low = min(value - pad for value, pad in zip(heights, height_pads))
+            high = max(value + pad for value, pad in zip(heights, height_pads))
             shift = (low + high) / 2
             half_height = max(0.52, (high - low) / 2 + 0.2)
-            near = Point2D(midpoint.x + shift * px, midpoint.y + shift * py)
-            far = Point2D(near.x + depth * dx, near.y + depth * dy)
-            layouts = [[near, dx, dy, px, py], [far, -dx, -dy, px, py]]
-    snapped_axes = _snap_paired_bracket_axes(
-        [(layout[3], layout[4]) for layout in layouts]
-    )
-    for layout, (perp_x, perp_y) in zip(layouts, snapped_axes):
+            near = Point2D(midpoint.x + shift * px + near_depth * dx, midpoint.y + shift * py + near_depth * dy)
+            far = Point2D(near.x + (far_depth - near_depth) * dx, near.y + (far_depth - near_depth) * dy)
+            outer = conf.GetAtomPosition(ports[0][1])
+            outer_depth = dx * (outer.x - midpoint.x) + dy * (outer.y - midpoint.y)
+            if outer_depth < near_depth:
+                layouts = [[near, dx, dy, px, py], [far, -dx, -dy, px, py]]
+            else:
+                # A folded arm crosses behind its core. Mark the cut on the bond itself.
+                half_height = 0.52
+    axes = [(layout[3], layout[4]) for layout in layouts]
+    if len(ports) == 2:
+        axes = _snap_paired_bracket_axes(axes)
+    for layout, (perp_x, perp_y) in zip(layouts, axes):
         midpoint, inner_dir_x, inner_dir_y, _old_perp_x, _old_perp_y = layout
         if bracket_style == "square":
             cap_length = 0.19
@@ -2851,10 +2863,6 @@ class _DrawingTranslator:
             svg_text = _italicize_axial_labels(svg_text, axial_anchors)
         if ring_bounds is not None:
             svg_text = _expand_svg_viewbox(svg_text, ring_bounds, pad=6.0)
-        if write_to is not None:
-            Path(write_to).parent.mkdir(parents=True, exist_ok=True)
-            Path(write_to).write_text(svg_text)
-            return
         return svg_text
 
 
